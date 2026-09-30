@@ -62,19 +62,20 @@ def main():
         if a.check:
             raise SystemExit('gearmulator submodule missing: git submodule update --init tools/emulator/third_party/gearmulator')
         subprocess.run(['git', '-C', str(HERE), 'submodule', 'update', '--init', str(GEAR)], check=True)
+    if a.reset:                                # works at any commit, e.g. before moving a pin
+        for repo, _ in reversed(PATCHES):
+            if (repo / '.git').exists():
+                git(repo, 'checkout', '--', '.')
+        print('patches removed')
+        return
     if not a.check:
         for repo, paths in NESTED:
             git(repo, 'submodule', 'update', '--init', *paths)
     for repo, commit in PINS.items():
         actual = head(repo)
         if actual != commit:
-            raise SystemExit(f'{repo.relative_to(HERE)} is at {actual}, expected {commit}')
-
-    if a.reset:
-        for repo, _ in reversed(PATCHES):
-            git(repo, 'checkout', '--', '.')
-        print('patches removed')
-        return
+            raise SystemExit(f'{repo.relative_to(HERE)} is at {actual}, expected {commit} '
+                             '(run: git submodule update --init tools/emulator/third_party/gearmulator, then setup.py)')
     problems = []
     for repo, patch in PATCHES:
         state = patch_state(repo, patch)
