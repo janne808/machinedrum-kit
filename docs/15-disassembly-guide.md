@@ -141,6 +141,6 @@ techniques used:
   changed (this disproved the overlay theory: six machines from six families were
   activated, all 18 entry breakpoints hit, and zero program writes occurred).
 
-The reference workspace has a monitor with these facilities: breakpoints,
-watchpoints, traces, `pclog`, MIDI and panel input, and LCD capture. Any
-emulator with instruction hooks can do the same.
+The kit's monitor ([emulator harness](18-emulator.md)) provides all of these:
+breakpoints, watchpoints, traces, `pclog`, MIDI and panel input, and LCD capture.
+Its `disasm` gives live listings of both CPUs straight from emulated memory.

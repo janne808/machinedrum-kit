@@ -3,7 +3,8 @@
 ## The emulator
 
 The findings and the custom machines were developed on an instrumented build
-of **Gearmulator's Machinedrum board model**:
+of **Gearmulator's Machinedrum board model**, included in the kit as
+[`tools/emulator`](18-emulator.md):
 
 - a ColdFire MCF5206E core (a Musashi fork with ColdFire support);
 - two DSP56303 cores from the dsp56300 emulator (JIT);
@@ -70,8 +71,8 @@ reproduces the DSP arithmetic exactly:
 - fractional remainders;
 - table lookups.
 
-A native test driver runs the assembled kernel in the DSP emulator **without
-the firmware**:
+A native test driver (the kit's `md-kernel`) runs the assembled kernel in the
+DSP emulator **without the firmware**:
 
 1. Load the program words at the bank.
 2. Write a packet and state block into Y memory.

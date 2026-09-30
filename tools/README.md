@@ -76,6 +76,24 @@ MDKIT_SYSEX=Elektron_SPS1-1UW_OS1.63.syx \
 python3 -m unittest discover -s tests              # adds checks against the real image
 ```
 
+## Emulator
+
+[`emulator/`](emulator/) builds the headless Machinedrum emulator used for every
+emulator result in the kit:
+
+- `md-harness`, a boot/MIDI/panel/audio smoke test;
+- `md-monitor`, a three-processor debugger with a Python client and a JSONL
+  protocol;
+- `md-kernel`, which runs a machine's DSP code outside the firmware.
+
+Gearmulator and its DSP/ColdFire cores are git submodules, pinned and patched
+by `emulator/setup.py`. See [docs/18-emulator.md](../docs/18-emulator.md).
+
+```sh
+git submodule update --init tools/emulator/third_party/gearmulator
+python3 emulator/harness.py build
+```
+
 ## Examples
 
 Both need `dsp56300-asm` ([mborgerson/dsp56300](https://github.com/mborgerson/dsp56300))
@@ -88,6 +106,18 @@ audio); neither has been flashed to hardware.
 | [`examples/gnd-sw`](examples/gnd-sw/) | GND-SW, a MIDI-tuned PolyBLEP saw, appended to the stock GND menu. The code region is reserved while RAM recording keeps working (checked). |
 | [`examples/nfx-gn`](examples/nfx-gn/) | The walkthrough machine from [doc 11](../docs/11-writing-a-custom-machine.md): a neighbour effect in a new, eleventh family (relocated family table) |
 | [`examples/common/guards.s`](examples/common/guards.s) | The sample-loader guards both examples link in |
+
+Each example has `build.py` (image, `.syx`, `build.json`), `model.py` (bit-exact
+integer model) and `verify.py`. The verifier runs kernel tests with
+`md-kernel`, then boots the image in the monitor. It needs the emulator
+built:
+
+```sh
+python3 examples/gnd-sw/build.py  --firmware STOCK.bin --asm dsp56300-asm --output out/sw
+python3 examples/gnd-sw/verify.py --build out/sw --firmware STOCK.bin
+python3 examples/nfx-gn/build.py  --firmware STOCK.bin --asm dsp56300-asm --output out/gn
+python3 examples/nfx-gn/verify.py --build out/gn
+```
 
 ## External tools
 

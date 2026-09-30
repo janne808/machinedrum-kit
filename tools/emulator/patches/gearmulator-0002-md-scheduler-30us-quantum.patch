@@ -1,0 +1,27 @@
+diff --git a/source/elektron/md/mdLib/mdhardware.cpp b/source/elektron/md/mdLib/mdhardware.cpp
+index f8b98dae..376a09b3 100644
+--- a/source/elektron/md/mdLib/mdhardware.cpp
++++ b/source/elektron/md/mdLib/mdhardware.cpp
+@@ -1067,9 +1067,19 @@ namespace md
+ 	{
+ 		double schedQuantumFrames(const MachineModel _model)
+ 		{
+-			// MM's host traffic needs a tighter background interleave than the MD
+-			// path so short mailbox pulses remain visible.
+-			const double us = _model == MachineModel::Monomachine ? 30.0 : 125.0;
++			// 30 us on both models. MM's host traffic needs it so short mailbox pulses
++			// remain visible. On MD a 125 us quantum let DSP1 spin a whole quantum in its
++			// host-command ISR (P:$9AF waits for the ColdFire's second HI08 word) and miss
++			// a block (machinedrum-kit docs/16-emulation-and-verification.md).
++			double us = 30.0;
++			// Diagnostic override (microseconds).
++			static const double overrideUs = []
++			{
++				const char* q = std::getenv("MD_SCHED_QUANTUM_US");
++				return q ? std::atof(q) : 0.0;
++			}();
++			if(overrideUs > 0)
++				us = overrideUs;
+ 			return us * static_cast<double>(g_samplerate) / 1.0e6;				// -> codec frames
+ 		}
+ 

@@ -1,0 +1,151 @@
+diff --git a/source/elektron/md/mdLib/mdhardware.cpp b/source/elektron/md/mdLib/mdhardware.cpp
+index 197ba324..f8b98dae 100644
+--- a/source/elektron/md/mdLib/mdhardware.cpp
++++ b/source/elektron/md/mdLib/mdhardware.cpp
+@@ -126,7 +126,7 @@ namespace md
+ 			m_midiSysexTransfer.observeTransmitByte(_byte);
+ 		});
+ 		m_mdOnDemandRendezvousArmPending = !isMonomachine()
+-			&& m_firmwareFingerprint == g_mdOs163Fingerprint;
++			&& RomLoader::isSupportedImage(g_romSize, m_firmwareFingerprint, m_model);
+ 
+ 		if(isMonomachine())
+ 		{
+diff --git a/source/elektron/md/mdLib/mdmc.cpp b/source/elektron/md/mdLib/mdmc.cpp
+index a711950f..8ec82e61 100644
+--- a/source/elektron/md/mdLib/mdmc.cpp
++++ b/source/elektron/md/mdLib/mdmc.cpp
+@@ -312,6 +312,7 @@ namespace md
+ 			return r;
+ 		};
+ 
++		if(_addr >= 0x0f000000 && _addr < 0x0f001000) return ram(debugMachineRam, _addr - 0x0f000000);
+ 		if(memorymap::g_flashLow.contains(_addr))			return rom(memorymap::g_flashLow.offset(_addr));
+ 		if(memorymap::g_patchBootstrap.contains(_addr))	return ram(m_patchRam, memorymap::g_patchBootstrap.offset(_addr));
+ 		if(memorymap::g_mainRam.contains(_addr))			return ram(m_mainRam, memorymap::g_mainRam.offset(_addr));
+@@ -520,6 +521,7 @@ namespace md
+ 
+ 			if(!m_externalIrq4Pending)
+ 			{
++				if(debugEvent) debugEvent("irq4_inject", vector, level);
+ 				injectInterrupt(vector, level);
+ 				m_externalIrq4Pending = true;
+ 				m_externalIrq4PendingLevel = level;
+@@ -547,6 +549,7 @@ namespace md
+ 		uint8_t level, vector;
+ 		while(m_sim.needsInterruptCheck() && m_sim.takeNextInterrupt(level, vector))
+ 		{
++			if(debugEvent) debugEvent("irq_inject", vector, level);
+ 			injectInterrupt(vector, level);
+ 		}
+ 
+@@ -573,6 +576,8 @@ namespace md
+ 
+ 	void Microcontroller::panelDisplayReadyPost()
+ 	{
++        if(debugEvent) debugEvent("task_workaround", 0x2899e8, debugTaskWorkaround);
++        if(!debugTaskWorkaround) return;
+ 		// Retained MD firmware task-list manipulation. A hardware-level readiness
+ 		// replacement is still needed; the original MAME attribution is unverified.
+ 		constexpr uint32_t g_semaphore       = 0x002899e8;
+@@ -647,8 +652,19 @@ namespace md
+ 		return 0;
+ 	}
+ 
++    bool Microcontroller::debugPeek(uint32_t address, uint8_t& value)
++    {
++        // Do not call read8: flash commands and MMIO reads can have side effects.
++        const auto region = resolve(address);
++        if(region.peripheral || !region.data || region.offset >= region.size)
++            return false;
++        value = region.data[region.offset];
++        return true;
++    }
++
+ 	uint8_t Microcontroller::read8(const uint32_t _addr)
+ 	{
++        if(debugAccess) debugAccess(false, _addr, 0, 1);
+ 		if(m_model == MachineModel::Machinedrum)
+ 		{
+ 			const auto offset = memorymap::g_flashLow.contains(_addr)
+@@ -723,6 +739,7 @@ namespace md
+ 
+ 	uint16_t Microcontroller::read16(const uint32_t _addr)
+ 	{
++        if(debugAccess) debugAccess(false, _addr, 0, 2);
+ 		if(m_model == MachineModel::Machinedrum)
+ 		{
+ 			const auto offset = memorymap::g_flashLow.contains(_addr)
+@@ -748,6 +765,7 @@ namespace md
+ 
+ 	void Microcontroller::write8(const uint32_t _addr, const uint8_t _val)
+ 	{
++        if(debugAccess) debugAccess(true, _addr, _val, 1);
+ 		if(memorymap::g_sim.contains(_addr))		{ m_sim.write8(memorymap::g_sim.offset(_addr), _val); return; }
+ 		if(memorymap::g_dsp1Hdi08.contains(_addr))	{ m_hdi08Dsp1.write8(static_cast<mc68k::PeriphAddress>(memorymap::g_dsp1Hdi08.offset(_addr)), _val); return; }
+ 		if(memorymap::g_dsp2Hdi08.contains(_addr))	{ m_hdi08Dsp2.write8(static_cast<mc68k::PeriphAddress>(memorymap::g_dsp2Hdi08.offset(_addr)), _val); return; }
+@@ -763,6 +781,7 @@ namespace md
+ 
+ 	void Microcontroller::write16(const uint32_t _addr, const uint16_t _val)
+ 	{
++        if(debugAccess) debugAccess(true, _addr, _val, 2);
+ 		if(m_model == MachineModel::Machinedrum)
+ 		{
+ 			const auto offset = memorymap::g_flashLow.contains(_addr)
+diff --git a/source/elektron/md/mdLib/mdmc.h b/source/elektron/md/mdLib/mdmc.h
+index d96d350c..56329485 100644
+--- a/source/elektron/md/mdLib/mdmc.h
++++ b/source/elektron/md/mdLib/mdmc.h
+@@ -58,6 +58,13 @@ namespace md
+ 			const std::vector<uint8_t>& _initialFlash,
+ 			const std::vector<uint8_t>& _initialUserFlash);
+ 
++        // Headless monitor. Callbacks run only on the emulation owner thread.
++        std::function<void(bool, uint32_t, uint32_t, unsigned)> debugAccess;
++        std::function<void(const char*, uint32_t, uint32_t)> debugEvent;
++        bool debugTaskWorkaround = true;
++        bool debugPeek(uint32_t address, uint8_t& value);
++        std::vector<uint8_t> debugMachineRam = std::vector<uint8_t>(4096, 0);
++
+ 		// mc68k::Mc68k overrides
+ 		uint32_t exec() override;
+ 		uint32_t readIrqUserVector(uint8_t _level) override;
+diff --git a/source/elektron/md/mdLib/mdromloader.cpp b/source/elektron/md/mdLib/mdromloader.cpp
+index 455634b9..0b226289 100644
+--- a/source/elektron/md/mdLib/mdromloader.cpp
++++ b/source/elektron/md/mdLib/mdromloader.cpp
+@@ -2,6 +2,13 @@
+ 
+ namespace md
+ {
++    namespace { bool experimentalEnabled = false; uint64_t experimentalFingerprint = 0; }
++    void RomLoader::allowExperimentalImage(const std::vector<uint8_t>& data)
++    {
++        experimentalEnabled = data.size() == g_romSize;
++        experimentalFingerprint = 14695981039346656037ull;
++        for (auto byte : data) { experimentalFingerprint ^= byte; experimentalFingerprint *= 1099511628211ull; }
++    }
+ 	Rom RomLoader::findROM()
+ 	{
+ 		return findROM(MachineModel::Machinedrum);
+@@ -30,7 +37,7 @@ namespace md
+ 			return false;
+ 		return _model == MachineModel::Monomachine
+ 			? _fingerprint == g_mmOs132bFingerprint
+-			: _fingerprint == g_mdOs163Fingerprint;
++			: (_fingerprint == g_mdOs163Fingerprint || (experimentalEnabled && _fingerprint == experimentalFingerprint));
+ 	}
+ 
+ 	bool RomLoader::isRomForModel(const std::vector<uint8_t>& _data,
+diff --git a/source/elektron/md/mdLib/mdromloader.h b/source/elektron/md/mdLib/mdromloader.h
+index 8c6656c0..41841b8b 100644
+--- a/source/elektron/md/mdLib/mdromloader.h
++++ b/source/elektron/md/mdLib/mdromloader.h
+@@ -9,6 +9,7 @@ namespace md
+ 	class RomLoader : synthLib::RomLoader
+ 	{
+ 	public:
++		static void allowExperimentalImage(const std::vector<uint8_t>& data);
+ 		static Rom findROM();
+ 		static Rom findROM(MachineModel _model);
+ 		static bool isSupportedImage(size_t _size, uint64_t _fingerprint,

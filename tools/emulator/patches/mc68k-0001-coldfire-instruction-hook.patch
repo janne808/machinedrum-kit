@@ -1,0 +1,26 @@
+diff --git a/Musashi/m68kconf.h b/Musashi/m68kconf.h
+index 9fecdda..153344a 100644
+--- a/Musashi/m68kconf.h
++++ b/Musashi/m68kconf.h
+@@ -161,7 +161,7 @@
+ /* If ON, CPU will call the instruction hook callback before every
+  * instruction.
+  */
+-#define M68K_INSTRUCTION_HOOK       OPT_OFF
++#define M68K_INSTRUCTION_HOOK       OPT_ON // headless monitor
+ #define M68K_INSTRUCTION_CALLBACK(pc) your_instruction_hook_function(pc)
+ 
+ 
+diff --git a/Musashi/m68kcpu.h b/Musashi/m68kcpu.h
+index 71627d5..636b19b 100644
+--- a/Musashi/m68kcpu.h
++++ b/Musashi/m68kcpu.h
+@@ -547,7 +547,7 @@ typedef uint32 uint64;
+ 	#if M68K_INSTRUCTION_HOOK == OPT_SPECIFY_HANDLER
+ 		#define m68ki_instr_hook(pc) M68K_INSTRUCTION_CALLBACK(pc)
+ 	#else
+-		#define m68ki_instr_hook(pc) CALLBACK_INSTR_HOOK(pc)
++		#define m68ki_instr_hook(pc) CALLBACK_INSTR_HOOK(m68ki_cpu, pc)
+ 	#endif
+ #else
+ 	#define m68ki_instr_hook(pc)

@@ -179,7 +179,10 @@ In the image:
 
 ## 7. Verify before hardware
 
-A machine is ready for hardware when all of these pass in the emulator:
+A machine is ready for hardware when all of these pass in the emulator. The
+examples' `verify.py` scripts do steps 1 and 3 with the kit's
+[emulator](18-emulator.md): `md-kernel` for the kernel, the monitor for the
+booted image.
 
 1. **Bit-exact kernel test.** Run the DSP code in a DSP56300 emulator with
    random packets, random neighbour input and random pre-existing state

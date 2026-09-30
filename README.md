@@ -42,6 +42,7 @@ your own copy of the firmware.
 | 15 | [Disassembly guide](docs/15-disassembly-guide.md) | Extracting and disassembling ColdFire and DSP code correctly |
 | 16 | [Emulation and verification](docs/16-emulation-and-verification.md) | Emulator limits, test methodology, hardware lessons |
 | 17 | [Open questions and errata](docs/17-open-questions.md) | What is unknown, and corrections to older notes |
+| 18 | [Emulator harness](docs/18-emulator.md) | Building and using the emulator, monitor and kernel runner in `tools/emulator` |
 | — | [Glossary](docs/glossary.md) | Terms used throughout |
 
 To add a machine, read 0, 1, 7, 8 and 11 first, then 12 and 13, and start
@@ -49,10 +50,16 @@ from the example in `tools/examples/nfx-gn`.
 
 ## Tools
 
-[`tools/`](tools/) contains `mdkit`, a standard-library Python package with a
-command line. It covers the codec, extraction, packing and checks, SysEx
-conversion and machine registration. It also has tests, and a complete,
-emulator-verified build of the example machine NFX-GN.
+[`tools/`](tools/) contains:
+
+- `mdkit`, a standard-library Python package with a command line: the codec,
+  extraction, packing and checks, SysEx conversion and machine registration,
+  with tests;
+- `emulator/`, the headless emulator used for every result here: a smoke
+  test, a three-processor debugger and a kernel runner. Third-party code is
+  pulled in as git submodules and patched at build time (doc 18);
+- two example machines, GND-SW and NFX-GN, with build scripts, reference
+  models and verifiers.
 
 ## Where this comes from
 
@@ -63,9 +70,8 @@ The findings come from:
   with ColdFire Musashi and dsp56300 DSP cores;
 - testing custom firmware on a real Machinedrum.
 
-The emulator harness, monitor and per-machine verifiers used to get these
-results live in the reference workspace this kit was distilled from. The file
-formats and packing steps are implemented here in `tools/`.
+The emulator, its debugger and the example verifiers are in `tools/`, so the
+emulator results can be reproduced with your own copy of the firmware.
 
 Where emulator and hardware can differ, the text says so. Emulator timing is
 optimistic: it charges no external-memory wait states and does not model the

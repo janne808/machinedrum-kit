@@ -1,0 +1,361 @@
+diff --git a/source/dsp56kEmu/dma.cpp b/source/dsp56kEmu/dma.cpp
+index d6e58f13..3fb001f7 100644
+--- a/source/dsp56kEmu/dma.cpp
++++ b/source/dsp56kEmu/dma.cpp
+@@ -325,6 +325,8 @@ namespace dsp56k
+ 
+ 	void DmaChannel::memCopy(EMemArea _dstArea, TWord _dstAddr, EMemArea _srcArea, TWord _srcAddr, TWord _count) const
+ 	{
++        auto& monitorDsp = m_peripherals.getDSP();
++        if(monitorDsp.debugTransfer) monitorDsp.debugTransfer("dma_copy", _srcArea, _srcAddr, _dstArea, _dstAddr, _count);
+ 		if(_dstAddr >= m_peripherals.getDSP().memory().getBridgedMemoryAddress())
+ 			_dstArea = MemArea_P;
+ 
+@@ -367,6 +369,8 @@ namespace dsp56k
+ 
+ 	void DmaChannel::memFill(EMemArea _dstArea, TWord _dstAddr, EMemArea _srcArea, TWord _srcAddr, TWord _count) const
+ 	{
++        auto& monitorDsp = m_peripherals.getDSP();
++        if(monitorDsp.debugTransfer) monitorDsp.debugTransfer("dma_fill", _srcArea, _srcAddr, _dstArea, _dstAddr, _count);
+ 		const auto readMultiple = isPeripheralAddr(_srcArea, _srcAddr);
+ 
+ 		if(_dstAddr >= m_peripherals.getDSP().memory().getBridgedMemoryAddress())
+@@ -408,6 +412,8 @@ namespace dsp56k
+ 
+ 	void DmaChannel::memCopyToFixedDest(EMemArea _dstArea, TWord _dstAddr, EMemArea _srcArea, TWord _srcAddr, TWord _count) const
+ 	{
++        auto& monitorDsp = m_peripherals.getDSP();
++        if(monitorDsp.debugTransfer) monitorDsp.debugTransfer("dma_fixed_destination", _srcArea, _srcAddr, _dstArea, _dstAddr, _count);
+ 		TWord srcAddr = _srcAddr;
+ 
+ 		for (TWord i = 0; i < _count; ++i)
+@@ -507,6 +513,8 @@ namespace dsp56k
+ 
+ 	TWord DmaChannel::memRead(EMemArea _area, TWord _addr) const
+ 	{
++        auto& monitorDsp = m_peripherals.getDSP();
++        if(monitorDsp.debugEvent) monitorDsp.debugEvent("dma_read", _addr, _area);
+ 		auto& dsp = m_peripherals.getDSP();
+ 		if (isPeripheralAddr(_area, _addr))
+ 		{
+@@ -517,6 +525,8 @@ namespace dsp56k
+ 
+ 	void DmaChannel::memWrite(EMemArea _area, TWord _addr, TWord _value) const
+ 	{
++        auto& monitorDsp = m_peripherals.getDSP();
++        if(monitorDsp.debugEvent) monitorDsp.debugEvent(_area == MemArea_X ? "dma_write_X" : _area == MemArea_Y ? "dma_write_Y" : "dma_write_P", _addr, _value);
+ 		auto& dsp = m_peripherals.getDSP();
+ 		if (isPeripheralAddr(_area, _addr))
+ 			dsp.getPeriph(_area)->write(_addr | 0xff0000, _value);
+diff --git a/source/dsp56kEmu/dsp.cpp b/source/dsp56kEmu/dsp.cpp
+index d8a37b72..f687e1e7 100644
+--- a/source/dsp56kEmu/dsp.cpp
++++ b/source/dsp56kEmu/dsp.cpp
+@@ -223,6 +223,7 @@ namespace dsp56k
+ 
+ 	void DSP::execInterrupt(const TWord vba)
+ 	{
++        if(debugEvent) debugEvent("irq_service", vba, 0);
+ 		pcCurrentInstruction = vba;
+ 		m_processingMode = FastInterrupt;
+ 
+@@ -1110,6 +1111,7 @@ namespace dsp56k
+ 
+ 	bool DSP::memWritePeriph( EMemArea _area, TWord _offset, TWord _value )
+ 	{
++		if(debugAccess) debugAccess(true, _area, _offset | 0xff0000, _value);
+ 		perif[_area - MemArea_X]->write(_offset | 0xff0000, _value );
+ 		return true;
+ 	}
+@@ -1139,6 +1141,7 @@ namespace dsp56k
+ 	//
+ 	dsp56k::TWord DSP::memRead( EMemArea _area, TWord _offset ) const
+ 	{
++        if(debugAccess) debugAccess(false, _area, _offset, 0);
+ 		// app may access the instruction cache on the DSP 56362? not sure about this, not clear for me in the docs
+ 
+ 	// 	if( _area == MemArea_P && sr_test(SR_CE) )
+@@ -1172,6 +1175,7 @@ namespace dsp56k
+ 
+ 	TWord DSP::memReadPeriph(EMemArea _area, TWord _offset, Instruction _inst) const
+ 	{
++		if(debugAccess) debugAccess(false, _area, _offset | 0xff0000, 0);
+ 		return perif[_area - MemArea_X]->read(_offset | 0xff0000, _inst);
+ 	}
+ 	TWord DSP::memReadPeriphFFFF80(EMemArea _area, TWord _offset, Instruction _inst) const
+@@ -1330,6 +1334,7 @@ namespace dsp56k
+ 
+ 	bool DSP::injectInterrupt(uint32_t _interruptVectorAddress)
+ 	{
++        if(debugEvent) debugEvent("irq_queue", _interruptVectorAddress, 0);
+ 		m_pendingInterrupts.push_back({_interruptVectorAddress});
+ 
+ 		if(m_interruptFunc == m_execPeripheralsFunc)
+diff --git a/source/dsp56kEmu/dsp.h b/source/dsp56kEmu/dsp.h
+index 45b43acc..c65f3dce 100644
+--- a/source/dsp56kEmu/dsp.h
++++ b/source/dsp56kEmu/dsp.h
+@@ -178,6 +178,14 @@ namespace dsp56k
+ 	public:
+ 				DSP								( Memory& _memory, IPeripherals* _pX, IPeripherals* _pY );
+ 
++        // Independent of the optional wxWidgets debugger. Installed before JIT compilation.
++        std::function<void(TWord)> debugInstruction;
++        std::function<void(bool, EMemArea, TWord, TWord)> debugAccess;
++        std::function<void(const char*, TWord, TWord)> debugEvent;
++        std::function<void(const char*, EMemArea, TWord, EMemArea, TWord, TWord)> debugTransfer;
++        SRegs debugSavedRegs{};
++        TWord debugPC = 0;
++
+ 		void 	resetHW							();
+ 		void 	resetSW							();
+ 
+@@ -290,6 +298,7 @@ namespace dsp56k
+ 				m_debugger->onExec(getPC().var);
+ #endif
+ 
++            if(debugInstruction) { debugPC = getPC().toWord(); debugInstruction(debugPC); }
+ 			pcCurrentInstruction = reg.pc.toWord();
+ 
+ 			const auto op = fetchPC();
+diff --git a/source/dsp56kEmu/jitdspregpool.cpp b/source/dsp56kEmu/jitdspregpool.cpp
+index 1bfa4378..844e7497 100644
+--- a/source/dsp56kEmu/jitdspregpool.cpp
++++ b/source/dsp56kEmu/jitdspregpool.cpp
+@@ -322,21 +322,49 @@ namespace dsp56k
+ 		release(_reg);
+ 	}
+ 
+-	void JitDspRegPool::debugStoreAll()
+-	{
+-		for(auto i=0; i<DspCount; ++i)
+-		{
+-			const auto r = static_cast<PoolReg>(i);
+-
+-			JitRegGP gp;
+-			SpillReg xm;
+-
+-			if(m_gpList.get(gp, r))
+-				store(r, gp);
+-			else if(m_xmList.get(xm, r))
+-				store(r, xm);
+-		}
+-	}
++    void JitDspRegPool::debugStoreAll()
++    {
++        for(auto i=0; i<DspCount; ++i)
++        {
++            const auto r = static_cast<PoolReg>(i);
++            JitRegGP gp;
++            SpillReg xm;
++            const bool inGP = m_gpList.get(gp, r);
++            if(!inGP && !m_xmList.get(xm, r)) continue;
++            if(r == DspX0 || r == DspX1 || r == DspY0 || r == DspY1)
++            {
++                // Normal XY stores are destructive release operations: store1 shifts
++                // its source GP, and store01 clears dirty flags. Neither is legal for
++                // a debugger snapshot while the cached registers remain live.
++                const RegGP value(m_block), pair(m_block);
++                if(inGP) m_block.asm_().mov(r32(value), r32(gp));
++                else m_block.asm_().movq(r64(value), xm.reg);
++                m_block.asm_().and_(r32(value), asmjit::Imm(0xffffff));
++                auto& target = (r == DspX0 || r == DspX1) ? m_block.dsp().regs().x : m_block.dsp().regs().y;
++                movDspReg(r64(pair), target);
++                if(r == DspX0 || r == DspY0)
++                {
++                    m_block.asm_().shr(r64(pair), asmjit::Imm(24));
++                    m_block.asm_().shl(r64(pair), asmjit::Imm(24));
++                }
++                else
++                {
++                    m_block.asm_().and_(r64(pair), asmjit::Imm(0xffffff));
++                    m_block.asm_().shl(r64(value), asmjit::Imm(24));
++                }
++                m_block.asm_().or_(r64(pair), r64(value));
++                movDspReg(target, r64(pair));
++            }
++            else if(r == DspX || r == DspY)
++            {
++                auto& target = r == DspX ? m_block.dsp().regs().x : m_block.dsp().regs().y;
++                if(inGP) movDspReg(target, gp);
++                else movDspReg(target, xm);
++            }
++            else if(inGP) store(r, gp);
++            else store(r, xm);
++        }
++    }
+ 
+ 	bool JitDspRegPool::isInUse(const JitReg128& _xmm) const
+ 	{
+diff --git a/source/dsp56kEmu/jitmem.cpp b/source/dsp56kEmu/jitmem.cpp
+index 801a1317..d7ae52c2 100644
+--- a/source/dsp56kEmu/jitmem.cpp
++++ b/source/dsp56kEmu/jitmem.cpp
+@@ -306,8 +306,27 @@ namespace dsp56k
+ 		m_block.asm_().lea_(r64(_dst), r64(regDspPtr), &m_block.dsp(), &m_block.dsp().regs());
+ 	}
+ 
++    void callMonitorRead(DSP* dsp, TWord area, TWord offset)
++    {
++        if(dsp->debugAccess) dsp->debugAccess(false, static_cast<EMemArea>(area), offset, 0);
++    }
++
++    void Jitmem::monitorRead(EMemArea area, const JitRegGP& offset) const
++    {
++        if(!m_block.dsp().debugAccess) return;
++        const FuncArg r0(m_block, 0), r1(m_block, 1), r2(m_block, 2);
++        auto assign = [this](uint32_t i, const JitRegGP& d, const JitRegGP& s) {
++            if(i == 0) makeDspPtr(d.as<JitReg64>());
++            else if(r32(d) != r32(s)) m_block.asm_().mov(r32(d), r32(s));
++        };
++        assignFuncArgs({r0, r2}, {regDspPtr, offset}, assign);
++        m_block.asm_().mov(r32(r1), asmjit::Imm(area));
++        m_block.stack().call(asmjit::func_as_ptr(&callMonitorRead));
++    }
++
+ 	Jitmem::MemoryRef Jitmem::readDspMemory(DspValue& _dst, const EMemArea _area, const JitRegGP& _offset, MemoryRef&& _ref) const
+ 	{
++        monitorRead(_area, _offset);
+ 		const SkipLabel skip(m_block.asm_());
+ 
+ 		if (!_dst.isRegValid())
+@@ -340,6 +359,10 @@ namespace dsp56k
+ 
+ 	void Jitmem::readDspMemory(DspValue& _dstX, DspValue& _dstY, const JitRegGP& _offset) const
+ 	{
++        if(m_block.dsp().debugAccess) {
++            monitorRead(MemArea_X, _offset);
++            monitorRead(MemArea_Y, _offset);
++        }
+ 		if (!_dstX.isRegValid())
+ 			_dstX.temp(DspValue::Memory);
+ 		if (!_dstY.isRegValid())
+@@ -367,6 +390,12 @@ namespace dsp56k
+ 
+ 	Jitmem::MemoryRef Jitmem::readDspMemory(DspValue& _dstX, DspValue& _dstY, const TWord& _offset) const
+ 	{
++        if(m_block.dsp().debugAccess) {
++            const RegGP address(m_block);
++            m_block.asm_().mov(r32(address), asmjit::Imm(_offset));
++            monitorRead(MemArea_X, address);
++            monitorRead(MemArea_Y, address);
++        }
+ 		if (_offset >= m_block.dsp().memory().sizeXY())
+ 			return noRef();
+ 
+@@ -390,6 +419,11 @@ namespace dsp56k
+ 
+ 	Jitmem::MemoryRef Jitmem::readDspMemory(DspValue& _dst, EMemArea _area, TWord _offset, MemoryRef&& _ref) const
+ 	{
++        if(m_block.dsp().debugAccess) {
++            const RegGP address(m_block);
++            m_block.asm_().mov(r32(address), asmjit::Imm(_offset));
++            monitorRead(_area, address);
++        }
+ 		const auto& mem = m_block.dsp().memory();
+ 		mem.memTranslateAddress(_area, _offset);
+ 
+@@ -644,12 +678,13 @@ namespace dsp56k
+ 
+ 	TWord callDSPMemReadPeriph(DSP* const _dsp, const TWord _area, const TWord _offset, Instruction _inst)
+ 	{
++		if(_dsp->debugAccess) _dsp->debugAccess(false, _area ? MemArea_Y : MemArea_X, _offset | 0xff0000, 0);
+ 		return _dsp->getPeriph(_area)->read(_offset | 0xff0000, _inst);
+ 	}
+ 
+ 	void callDSPMemWritePeriph(DSP* const _dsp, const TWord _area, const TWord _offset, const TWord _value)
+ 	{
+-		_dsp->getPeriph(_area)->write(_offset | 0xff0000, _value);
++		_dsp->memWritePeriph(_area ? MemArea_Y : MemArea_X, _offset, _value);
+ 	}
+ 
+ 	void Jitmem::readPeriph(DspValue& _dst, const EMemArea _area, TWord _offset, const Instruction _inst) const
+@@ -659,7 +694,7 @@ namespace dsp56k
+ 
+ 		auto* periph = m_block.dsp().getPeriph(_area);
+ 
+-		const auto* memPtr = periph->readAsPtr(_offset, _inst);
++		const auto* memPtr = m_block.dsp().debugAccess ? nullptr : periph->readAsPtr(_offset, _inst);
+ 
+ 		if(memPtr)
+ 		{
+diff --git a/source/dsp56kEmu/jitmem.h b/source/dsp56kEmu/jitmem.h
+index 193f1004..b07bdd10 100644
+--- a/source/dsp56kEmu/jitmem.h
++++ b/source/dsp56kEmu/jitmem.h
+@@ -63,6 +63,8 @@ namespace dsp56k
+ 
+ 		Jitmem(JitBlock& _block) : m_block(_block) {}
+ 
++		void monitorRead(EMemArea area, const JitRegGP& offset) const;
++
+ 		void mov(uint32_t* _dst, const uint32_t& _imm) const;
+ 		void mov(uint64_t* _dst, const uint64_t& _imm) const;
+ 
+diff --git a/source/dsp56kEmu/jitops.cpp b/source/dsp56kEmu/jitops.cpp
+index 0a23ac70..c1dcf6c1 100644
+--- a/source/dsp56kEmu/jitops.cpp
++++ b/source/dsp56kEmu/jitops.cpp
+@@ -274,12 +274,32 @@ namespace dsp56k
+ 		emit(_pc, op, opB);
+ 	}
+ 
++    void saveMonitorRegisters(DSP* dsp, const TWord)
++    {
++        // Publication must not commit cached state early (notably interrupt PC/LC).
++        dsp->debugSavedRegs = dsp->regs();
++    }
++
++    void callMonitorInstruction(DSP* dsp, const TWord pc)
++    {
++        dsp->debugPC = pc;
++        if(dsp->debugInstruction) dsp->debugInstruction(pc);
++        dsp->regs() = dsp->debugSavedRegs;
++    }
++
+ 	void JitOps::emit(const TWord _pc, const TWord _op, const TWord _opB)
+ 	{
+ 		m_pcCurrentOp = _pc;
+ 		m_opWordA = _op;
+ 		m_opWordB = _opB;
+ 		m_opSize = 1;
++        if(m_block.dsp().debugInstruction)
++        {
++            callDSPFunc(&saveMonitorRegisters, 0);
++            updateDirtyCCR(CCR_All);
++            m_block.dspRegPool().debugStoreAll();
++            callDSPFunc(&callMonitorInstruction, _pc);
++        }
+ 
+ 		if(!_op)
+ 		{
+@@ -855,7 +875,7 @@ namespace dsp56k
+ 		TWord opB;
+ 		m_block.dsp().mem.getOpcode(m_pcCurrentOp + 1, opA, opB);
+ 
+-		if(opA && !OpcodeInfo::isParallelOpcode(opA))
++		if(!m_block.dsp().debugInstruction && opA && !OpcodeInfo::isParallelOpcode(opA))
+ 		{
+ 			const auto* oi = m_block.dsp().opcodes().findNonParallelOpcodeInfo(opA);
+ 			if(oi && oi->getInstruction() == Div)
+@@ -865,7 +885,7 @@ namespace dsp56k
+ 				return;
+ 			}
+ 		}
+-		else if(!opA)
++		else if(!m_block.dsp().debugInstruction && !opA)
+ 		{
+ 			// rep nop => do nothing
+ 			m_blockRuntimeData.getEncodedInstructionCount() += _lc;
+diff --git a/source/dsp56kEmu/memory.cpp b/source/dsp56kEmu/memory.cpp
+index bbdc0010..023dc08a 100644
+--- a/source/dsp56kEmu/memory.cpp
++++ b/source/dsp56kEmu/memory.cpp
+@@ -104,6 +104,7 @@ namespace dsp56k
+ 	//
+ 	bool Memory::dspWrite( EMemArea& _area, TWord& _offset, TWord _value )
+ 	{
++        if(m_dsp && m_dsp->debugAccess) m_dsp->debugAccess(true, _area, _offset, _value);
+ #if MEMORY_HEAT_MAP
+ 		++m_heatMap[_area][_offset];
+ #endif

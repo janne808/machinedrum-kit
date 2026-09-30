@@ -1,0 +1,4 @@
+[submodule "tools/emulator/third_party/gearmulator"]
+	path = tools/emulator/third_party/gearmulator
+	url = https://github.com/joelanders/gearmulator-md-mm.git
+	ignore = dirty
