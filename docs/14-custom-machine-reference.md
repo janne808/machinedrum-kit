@@ -1,0 +1,121 @@
+# Custom machine reference
+
+The kit's two machines, as worked examples of the ABI: a generator (GND-SW)
+and a neighbour effect (NFX-GN). Both have complete sources and build scripts
+in [`tools/examples`](../tools/examples/). For each: identity, algorithm,
+packet and state layout, and cost.
+
+Costs are emulator cycles per 32-sample block (budget 73,728; an idle track
+costs 3,438). The emulator charges no memory wait states, so hardware costs
+are higher.
+
+| Machine | ID / DSP type | Family | DSP bank | Kind | Cost |
+| --- | --- | --- | --- | --- | ---: |
+| GND-SW | 8 / 9 | GND (fifth entry) | `0x1F3000` | Generator | 734 default, 2,341 at note 127 with maximum ramp |
+| NFX-GN | 15 / 16 | NFX (new eleventh family) | `0x1FA000` | Neighbour effect | 154 |
+
+Both use the code-region reservation from `0x1F0000` (see
+[packing](12-packing-firmware.md#reserving-sample-memory)). Neither needs
+sample memory beyond its code bank, and all stock machines stay.
+
+## GND-SW: PolyBLEP saw
+
+A MIDI-tuned saw that reuses GND-SIN's controls, envelopes and state layout, so
+GND-SIN's knobs keep their meaning.
+
+| Knob | Meaning | Default |
+| --- | --- | ---: |
+| PTCH | MIDI note, A4 (69) = 440 Hz | 73 |
+| DEC | GND-SIN's amplitude-decay coefficient | 96 |
+| RAMP | GND-SIN's pitch-ramp amount | 0 |
+| RDEC | GND-SIN's ramp-decay coefficient | 0 |
+
+**Handler** (`control.s`), returns 5 words like GND-SIN:
+
+| Word | Conversion |
+| --- | --- |
+| `+1` | `pitch[min(127, (raw + 64) >> 7)]`: nearest MIDI note, from a 128-entry table `round(440·2^((n−69)/12)·2^23/44100)` in flash |
+| `+2` | `decay[raw >> 5]` from the stock table at `0x24BF94` |
+| `+3` | `(raw·raw) >> 7` |
+| `+4` | `decay[raw >> 5]` |
+
+Rounding PTCH to the nearest note makes the OS's knob slews step through
+semitones instead of detuning.
+
+**DSP state** (GND-SIN's layout):
+
+| Word | Contents | Reset by update (trig) |
+| --- | --- | --- |
+| `+1`–`+4` | Packet | — |
+| `+5` | Untouched | — |
+| `+6` | Pitch-ramp envelope | `0x7FFFF8` |
+| `+7` | Phase, unsigned 23 bits | 0 |
+| `+8` | Unused | 0 |
+| `+9`, `+A` | Amplitude envelope, low and high words | 0, `0x7FFFF8` |
+
+Init is `rts`.
+
+**Render**:
+
+1. **Block step**: add the ramp contribution (`ramp · ramp_env`, ×4 to convert
+   GND-SIN's frequency units to 2^23-cycle phase units) to the base step.
+   Clamp to `0x3FFFFF`, just below Nyquist, so an extreme ramp cannot fold the
+   fundamental. Update the ramp envelope once per block.
+2. **Oscillator**, 32 samples into `X:0x00–0x1F`:
+   - The raw saw is `2p − Q` for phase `p` and `Q = 2^23`.
+   - **PolyBLEP**: within one step `d` of the wrap, add `Q·(1 − p/d)²` on the
+     left side or subtract `Q·(1 − (Q − p)/d)²` on the right.
+   - A sample is outside both zones exactly when `|2p − Q| ≤ Q − 2d`. The
+     kernel tests that with one `cmpm` against `K = Q − 2d` held in a register.
+     Only edge samples call the correction subroutine (a 24-step `div`, then a
+     square).
+   - Store `saw >> 2`: quarter scale, like GND-SIN.
+3. **Envelope**: GND-SIN's two-word amplitude envelope multiplies the scratch
+   samples into the output bank.
+
+The kit's `machine.s` is a cycle-optimized kernel generated from a simpler
+reference. The two are bit-exact on output, oscillator scratch and state.
+Measured cost: 734 cycles at the default note, 2,341 at note 127 with maximum
+ramp (nearly every sample is an edge).
+
+PolyBLEP reduces aliasing but does not remove it (about 15–18 dB less
+foldback than a naive saw in tests).
+
+## NFX-GN: neighbour gain
+
+Scales the previous track's raw voice. It is the minimal neighbour effect,
+written in full in [doc 11](11-writing-a-custom-machine.md).
+
+| Knob | Meaning | Default |
+| --- | --- | ---: |
+| GAIN | 0 … about 1.98×, unity at 64 | 64 |
+
+**Handler**: `packet[1] = (raw < 64 ? 0 : raw) << 9`, which is gain/2 in Q23
+(`0x400000` = unity at knob 64, `0x7F0000` at 127). It returns 2 words.
+
+**DSP**:
+
+- Init and update are `rts`; there is no private state.
+- Render:
+  - on track 0, write 32 zeros;
+  - otherwise read the other output bank (`Y:0x140 ^ 0x20`); for each sample
+    `y = x·g·2`, stored with limiting.
+- Bit-exact model: `y = clamp((x·g) >> 22, −2^23, 2^23 − 1)`.
+- 23 words, 154 cycles per block.
+
+It is deliberately unoptimized. The multiply can take the next sample's load as
+a parallel move, which would roughly halve the loop.
+
+## Building your own
+
+Start from the example whose shape is closest:
+
+- **A generator** keeps phases and envelopes in its private state words and
+  ignores the neighbour bank (GND-SW).
+- **A neighbour effect** reads `Y:0x140 ^ 0x20` and must output silence on
+  track 0 (NFX-GN).
+- **An effect with memory** (a delay line) needs per-track storage outside the
+  64-word state block. Reserve it from sample memory like the code region, at
+  a lower address. If the space needed exceeds what the RAM machines can
+  spare, give them up (see
+  [removing the RAM machines](12-packing-firmware.md#removing-the-ram-machines-to-gain-delay-memory)).
