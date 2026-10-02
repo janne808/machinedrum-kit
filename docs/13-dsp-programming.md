@@ -227,8 +227,22 @@ compute sines or upload your own table.
 
 - **73,728 cycles** per block for DSP2's whole producer pass: 16 renders plus
   dispatch, updates, interrupts and DMA waits.
-- An **idle** track costs 3,438 (the fallback renderer's padding). A machine
-  cheaper than that makes an empty kit slot "free".
+- **Every track costs at least ~3,000 cycles**: the time to send its 32-word
+  block to DSP1. DSP2 waits for the previous transfer before the next one. Budget
+  `sum(max(render + ~100, ~3,000))`, not the sum of renders (see the
+  [voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
+  - An **idle** track renders for 3,438 cycles (the fallback renderer's
+    padding), about one transfer.
+  - A cheaper machine on that track saves only the part above ~3,000.
+- **Work in a track's slot is free up to the floor.** A machine that occupies
+  two tracks gains from the second only by moving real work into that
+  track's render; a second render that just writes zeros still costs a full
+  slot.
+  - **Balance:** split the work so both renders sit near ~3,000–3,500.
+  - **Order:** the first track renders before the second in each pass. The
+    first can produce the output from history (for example delay-line taps
+    older than the block). The second then advances the state for the next
+    block, with the hand-over kept in the first track's state block.
 - Plan with the **worst block**, not the average: an envelope attack, all
   tracks triggered in the same block, maximum resonance, maximum pitch, all
   edges in one block.
@@ -254,6 +268,8 @@ compute sines or upload your own table.
 | NFX-GN | 154 |
 
 As rough guidance from other custom machines built the same way:
+
+Render costs only; each track still costs at least ~3,000 of the pass.
 
 | Kind of machine | Cycles/block |
 | --- | ---: |

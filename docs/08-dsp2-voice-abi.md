@@ -184,8 +184,38 @@ waits) must fit in **73,728 cycles**. Planning numbers from the emulator:
 | GND-SW (example) | 734 default, 2,341 worst |
 | NFX-GN (example) | 154 |
 
-Kits whose render calls sum to about 62.5k cycles have met the deadline in the
-emulator. The
-safe total on hardware is lower: the emulator charges no external-memory wait
-states. Leave generous headroom and measure worst cases, not averages
-(see [DSP programming](13-dsp-programming.md#budgeting)).
+### The voice-link slot floor
+
+A render's cost is not the whole story. After each render the dispatcher waits
+for the **previous** voice's DMA0 transfer to finish (`P:0xCF`) before it starts
+this voice's (`P:0xD1`). One 32-word voice block takes about **2,900–3,000
+cycles** to cross ESSI0 to DSP1 (measured in the emulator with breakpoints at
+`P:0xB4`, `P:0xB5` and `P:0xD1`):
+
+| Track | Render | Wait for the link | Slot |
+| --- | ---: | ---: | ---: |
+| ~700-cycle source after a ~6,400-cycle voice | 796 | ~2,380 | ~3,300 |
+| 44-cycle render (32 zeros) after a ~6,400-cycle voice | 44 | ~2,850 | ~2,990 |
+| ~3,300-cycle render | ~3,300 | 12 | ~3,400 |
+
+Here the slot is the time from one transfer start to the next. So every track
+costs at least about 3,000 cycles of the pass, however cheap its render. The
+budget is
+
+    sum over the 16 tracks of max(render + ~100, ~3,000)  <=  73,728
+
+not the sum of the renders. The fallback renderer's 3,438-cycle padding is about
+one transfer time. A kit of cheap renders gains nothing below the floor. A
+machine needing more than one slot's worth only gains from a second track if it
+puts real work into that track's render (see
+[DSP programming](13-dsp-programming.md#budgeting)).
+
+**Measured kits.**
+- Kits whose render calls sum to about 62.5k cycles have met the deadline in
+  the emulator.
+- A kit whose renders summed to only 50k missed about 3.5 % of blocks. Its
+  seven ~6,400-cycle voices were each followed by a 44-cycle one, and every
+  short one still cost a full transfer slot.
+
+The safe total on hardware is lower: the emulator charges no external-memory
+wait states. Leave generous headroom and measure worst cases, not averages.
