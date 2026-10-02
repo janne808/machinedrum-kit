@@ -1133,7 +1133,7 @@ class Monitor {
             return array(rows);
         }
         if (cmd == "midi") {
-            arity(2, 257);
+            arity(2, 65537);                // whole SysEx dumps (a kit dump is over 256 bytes)
             std::vector<uint8_t> bytes;
             for (size_t i = 1; i < t.size(); ++i)
                 bytes.push_back(number(t[i], 255));
