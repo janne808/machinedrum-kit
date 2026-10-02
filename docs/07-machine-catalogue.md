@@ -42,15 +42,69 @@ machine.
 `0x252092 + 4·ID` holds a pointer to the descriptor of machine `ID`
 (192 entries). In stock OS 1.63:
 
-- IDs **4–15** point to the empty descriptor `0x24EF54`. They are free for custom
-  machines. The kit's examples use 8 (GND-SW) and 15 (NFX-GN).
-- Other unused IDs in the range have not been audited. IDs in other ranges carry
-  sample, MIDI or controller semantics in other parts of the OS; do not reuse
-  them without that audit.
+- These IDs point to the empty descriptor `0x24EF54`: 0, 4–15, 29–31,
+  40–47, 73–79, 86–95, 114–119, 124–127, 164 and 169–175.
+- **26 more are free for custom machines** besides 4–15 (see
+  [free IDs](#free-ids)): **30–31, 40–47, 73–79 and 86–94**. The kit's examples
+  use 8 (GND-SW) and 15 (NFX-GN).
 
 The OS resolves defaults, labels and the handler through this table when a
 track is assigned, and stores the handler pointer in the per-track slot
 `0x29F27C + 4·t`.
+
+### Free IDs
+
+| IDs | Status | Evidence |
+| --- | --- | --- |
+| 4–15 | Free; used by custom machines on hardware | The GND family's empty slots |
+| 30–31, 40–47, 73–79, 86–94 | Free (verified in the emulator) | Static audit and differential test, below |
+| 29 | **Not free** | Empty descriptor, but DSP type 30 runs a hidden stock routine (`0x102D06`, `0x102D31`, `0x102D49`) |
+| 95 | **Not free** | The machine-page display treats non-ROM IDs above 94 as MIDI/controller machines |
+| 114–119, 124–127, 164, 169–175 | **Not free** | Inside the MID/CTR/ROM/RAM ranges |
+| 0 | **Not free** | "No machine" |
+
+**What the OS tests.** The ColdFire code tells families apart only by these
+tests on a track's ID:
+
+| Test | Family |
+| --- | --- |
+| `id − 80 ≤ 5` (unsigned) | INP, 80–85 |
+| `id & 0xF0 == 0x60` | MID, 96–111 |
+| `id == 112`, `id == 113`, `id & 0xF8 == 0x78` | CTR |
+| `id − 128 ≤ 31`, `id − 176 ≤ 15`, `id − 128 ≤ 40`, 160/165/166 | ROM and RAM |
+| `id > 94` (not ROM): MIDI/controller page | Machine-page display (`0x2282EE`) |
+| `id > 95`: non-synthesis branch | Assignment (`0x2052FE`) |
+
+Nothing tests the TRX, EFM, E12 or P-I ranges, so an ID in a gap between
+those families gets no family-specific handling.
+
+**How this was established:**
+- **Static audit.** Every ColdFire access to the current kit's machine IDs (122
+  code sites) was checked for range tests.
+- **Readers in use.** Reads of the ID array, the ID table and the handler
+  slots were traced during boot, assignment, trigs, kit SysEx and the browser.
+- **Differential test.** One image registered the same machine under every
+  candidate ID and, as a control, under ID 15. The same scenario then ran
+  once per ID:
+  - SysEx assignment, knobs and trigs, with the audio recorded;
+  - kit save/load (`0x59`/`0x58`) and a dump/receive round trip (`0x53`/`0x52`);
+  - the front-panel browser, with LCD captures.
+- **Result.** Audio and LCD were bit-identical to the control. Every RAM
+  difference was stale task-stack data, the browser's row and scroll state,
+  the menu-row byte of the inverse map, SysEx checksums, or DSP2's position
+  in its block at the snapshot. The emulator is deterministic: two control
+  runs matched byte for byte.
+
+**Not covered yet:**
+- sequencer playback of patterns with parameter locks;
+- track copy/paste, sound save/recall, randomize, song mode;
+- hardware.
+
+Boot-test one image with a machine on a new ID before relying on it.
+
+**DSP type.** For any ID, also check that DSP type ID+1 still points at the
+fallback entries (`mdkit.machine.dsp_type_free`; `register_id(..., dsp)` checks
+it).
 
 **Removing a machine.** Point its ID-table entry back to `0x24EF54`, and point
 its three DSP dispatch cells to the fallback entries. Old kits and SysEx

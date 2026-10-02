@@ -91,7 +91,7 @@ stored value (often 0) is harmless, or document which value reproduces the old
 sound, for example "set GAIN to 64 for kits saved with version 1".
 
 **Kits referencing custom IDs are not portable to stock firmware**: stock OS 1.63
-maps IDs 4–15 to the empty machine.
+maps all the free IDs (4–15, 30–31, 40–47, 73–79, 86–94) to the empty machine.
 
 **DSP type latching.** Reassigning a track in the kit does not immediately change
 the DSP voice. The old DSP type keeps running until the next trig sets the
@@ -113,7 +113,7 @@ Channel numbering below is the Machinedrum's base channel (channel 1 = `0`).
 In the assignment SysEx, MODEL is the firmware machine ID for the standard
 machines (`UW = 0`). UW machines (ROM and RAM, IDs 128–191) use `MODEL = ID − 128`
 with `UW = 1` (for example ROM-01 = `00/01`, RAM-R1 = `20/01`, ROM-33 = `30/01`).
-Custom machines at IDs 4–15 are assigned with `UW = 0`, `MODEL = ID`. The existing
+Custom machines (free IDs, all below 95) are assigned with `UW = 0`, `MODEL = ID`. The existing
 verifiers send `F0 00 20 3C 02 00 5B t ID 00 02 F7`.
 
 ## Raw control words and smoothing

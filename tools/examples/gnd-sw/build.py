@@ -64,7 +64,7 @@ def build(firmware, asm, output, prefix='m68k-linux-gnu-', version=None):
 
     # MainOS: reserve the code region, register the ID, point GND at the new menu.
     plan = mc.reserve_sample_memory(main, CODE_REGION, cf['guard_loader_a'], cf['guard_loader_b'])
-    mc.register_id(main, ID, desc_cpu)
+    mc.register_id(main, ID, desc_cpu, dsp)
     mc.set_family_list(main, 0, gnd_list, menu_cpu)
 
     # DSP2: dispatch cells for type 9 and the program upload.

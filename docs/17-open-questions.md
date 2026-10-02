@@ -10,7 +10,7 @@
 | Descriptor "format" bytes `+50..+53` and the tail `+54..+85` | Custom display formats for knob values | Vary the bytes and observe the LCD |
 | When exactly the OS reruns control handlers | Handlers with expensive work; tempo-synced parameters | Breakpoint the handler during sequencer playback, tempo changes, trigs |
 | Maximum packet length | Machines with more than ~10 control words | Return larger counts and read back `Y:S…` |
-| Unused IDs outside 4–15 (for example 30, 31, 40–47) | More than 12 custom machines | Audit every reader of the ID table and the sysex/UW mappings |
+| The extra free IDs (30–31, 40–47, 73–79, 86–94) on hardware, and under sequencer playback, copy/paste, sound save, randomize and song mode | They passed the static audit and an emulator differential test of assignment, kits, SysEx and the browser ([catalogue](07-machine-catalogue.md#free-ids)) | Boot-test a machine on a new ID; repeat the differential test with those operations |
 | Purpose of the fallback renderer's NOP padding | Removing it would free ~1.5k cycles per idle track | Look for timing dependencies (DMA, ESSI) with the padding shortened on hardware |
 | 32-ROM/2-RAM configuration with the pool reservation | Other Machinedrum variants | Boot-test that branch |
 | The code-region reservation (`0x1F0000`) with RAM machines kept, on hardware | The recommended layout for custom machines; verified only in the emulator | Flash the GND-SW example; record with RAM-R1..R4 and load a large sample bank |

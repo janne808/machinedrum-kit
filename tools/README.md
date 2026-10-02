@@ -51,7 +51,7 @@ dsp = img.DspStream(payloads['DSP2'])
 desc = mc.descriptor(main, handler_cpu, 8, 'GND', 'SW', labels, defaults)
 menu = mc.menu_list(mc.read_list(main, mc.GND_LIST) + [img.flash_cpu(0xFF000)])
 mc.reserve_sample_memory(main, 0x1F0000, guard_a_cpu, guard_b_cpu)  # code region
-mc.register_id(main, 8, img.flash_cpu(0xFF000))           # compare-before-write
+mc.register_id(main, 8, img.flash_cpu(0xFF000), dsp)      # free ID, empty entry, unused DSP type
 mc.set_family_list(main, 0, mc.GND_LIST, img.flash_cpu(0xFF100))
 mc.set_dispatch(dsp, 9, entries)                          # cells must hold the fallback
 mc.add_program(dsp, 0x1F3000, 0x1000, code)               # refuses overlaps

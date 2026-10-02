@@ -16,7 +16,7 @@ still working (**Verified**; not yet flashed to hardware).
 
 | Decision | NFX-GN | Constraints |
 | --- | --- | --- |
-| Firmware ID | 15 | Use a free ID in 4–15 (see [catalogue](07-machine-catalogue.md#id-table)). DSP type = ID + 1 = 16. |
+| Firmware ID | 15 | Use a free ID: 4–15, 30–31, 40–47, 73–79 or 86–94 (see [catalogue](07-machine-catalogue.md#free-ids)). DSP type = ID + 1 = 16, which must still be unused. |
 | Family | NFX, a new eleventh family | Existing family: append to its menu (as GND-SW does). A new family means relocating the family table. |
 | Name | `NFX-GN` | 3-character family + 2-character suffix |
 | Knobs | GAIN (default 64) | Up to 8 labels of 4 characters |

@@ -14,7 +14,15 @@ EMPTY_DESCRIPTOR = 0x24EF54
 GND_SIN_DESCRIPTOR = 0x24EFAA      # template for custom descriptors
 DESCRIPTOR_SIZE = 86
 ID_TABLE = 0x252092                # 192 x u32 descriptor pointers
-FREE_IDS = range(4, 16)            # stock: point at the empty descriptor
+# IDs that point at the empty descriptor in stock OS 1.63 and were verified free for
+# custom synthesis machines: 4-15 (the GND slots, used on hardware) and the gaps
+# between families that passed the static audit and the emulator differential test
+# (docs/07-machine-catalogue.md#free-ids). Not free: 29 (DSP type 30 runs a hidden
+# stock routine), 95 (drawn as a MIDI/controller machine page), 96+ (MID, CTR,
+# ROM/RAM semantics).
+GND_FREE_IDS = tuple(range(4, 16))
+EXTRA_FREE_IDS = (30, 31) + tuple(range(40, 48)) + tuple(range(73, 80)) + tuple(range(86, 95))
+FREE_IDS = GND_FREE_IDS + EXTRA_FREE_IDS
 FAMILY_TABLE = 0x252396            # 8-byte records {name[4], list pointer}, zero record ends
 STOCK_FAMILIES = 10
 GND_LIST = 0x251E3E
@@ -151,10 +159,13 @@ def read_families(mainos):
     raise ImageError('unterminated family table')
 
 
-def register_id(mainos, ident, descriptor_cpu):
-    """ID table entry: empty descriptor -> new descriptor."""
+def register_id(mainos, ident, descriptor_cpu, dsp=None):
+    """ID table entry: empty descriptor -> new descriptor. With `dsp`, also check
+    that DSP type ident+1 is unused (all three cells on the fallback entries)."""
     if ident not in FREE_IDS:
-        raise ImageError('custom IDs are 4..15')
+        raise ImageError(f'ID {ident} is not a verified free ID: 4-15, 30-31, 40-47, 73-79, 86-94')
+    if dsp is not None and not dsp_type_free(dsp, ident + 1):
+        raise ImageError(f'DSP type {ident + 1} of ID {ident} is already used')
     mainos_word(mainos, ID_TABLE + 4 * ident, EMPTY_DESCRIPTOR, descriptor_cpu)
 
 
@@ -193,6 +204,11 @@ def relocate_family_table(mainos, new_table_cpu, extra):
 
 
 # ---- DSP2 edits --------------------------------------------------------------------
+
+def dsp_type_free(dsp, dsp_type):
+    """True when all three dispatch cells of `dsp_type` hold their table's fallback."""
+    return all(dsp.read(t + dsp_type) == dsp.read(t) for t in DISPATCH_TABLES)
+
 
 def set_dispatch(dsp, dsp_type, entries):
     """Point one DSP type's init/update/render cells at `entries`. Each cell must

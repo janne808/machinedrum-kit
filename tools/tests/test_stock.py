@@ -35,9 +35,13 @@ class Stock(unittest.TestCase):
         self.assertEqual([f[1] for f in fams],
                          ['GND', 'TRX', 'EFM', 'E12', 'P-I', 'INP', 'MID', 'CTR', 'ROM', 'RAM'])
         self.assertEqual(mc.read_list(main, mc.GND_LIST), [0x24EF54, 0x24EFAA, 0x24F000, 0x24F056])
+        s = img.DspStream(self.payloads['DSP2'])
         for i in mc.FREE_IDS:
             self.assertEqual(img.mainos_read(main, mc.ID_TABLE + 4 * i), (0x24EF54).to_bytes(4, 'big'))
-        s = img.DspStream(self.payloads['DSP2'])
+            self.assertTrue(mc.dsp_type_free(s, i + 1), i)
+        # ID 29 points at the empty descriptor but its DSP type runs stock code.
+        self.assertEqual(img.mainos_read(main, mc.ID_TABLE + 4 * 29), (0x24EF54).to_bytes(4, 'big'))
+        self.assertFalse(mc.dsp_type_free(s, 30))
         self.assertEqual([s.read(t) for t in mc.DISPATCH_TABLES], [0x10008E, 0x10008E, 0x10008F])
         self.assertEqual([s.read(t + 2) for t in mc.DISPATCH_TABLES], [0x1000A3, 0x1000A4, 0x1000AD])
         self.assertFalse(s.overlaps(0x1F0000, 0x10000))

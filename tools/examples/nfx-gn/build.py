@@ -60,7 +60,7 @@ def build(firmware, asm, output, prefix='m68k-linux-gnu-', version=None):
     # MainOS: code region, family table with NFX appended, ID 15.
     plan = mc.reserve_sample_memory(main, CODE_REGION, cf['guard_loader_a'], cf['guard_loader_b'])
     table = mc.relocate_family_table(main, table_cpu, [('NFX', menu_cpu)])
-    mc.register_id(main, ID, desc_cpu)
+    mc.register_id(main, ID, desc_cpu, dsp)
 
     mc.set_dispatch(dsp, DSP_TYPE, entries)
     mc.add_program(dsp, DSP_BANK, DSP_CAPACITY, code)

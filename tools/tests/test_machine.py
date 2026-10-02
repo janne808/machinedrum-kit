@@ -13,7 +13,7 @@ def fake_mainos():
     tpl = bytearray(86); tpl[0:4] = (0x201130).to_bytes(4, 'big'); tpl[4] = 1; tpl[5:10] = b'GNDSN'
     put(mc.GND_SIN_DESCRIPTOR, bytes(tpl))
     for i in range(192):
-        put(mc.ID_TABLE + 4 * i, (0x24EF54 if 4 <= i <= 15 else 0x24F000 + i).to_bytes(4, 'big'))
+        put(mc.ID_TABLE + 4 * i, (0x24EF54 if i in mc.FREE_IDS or i == 29 else 0x24F000 + i).to_bytes(4, 'big'))
     names = [b'GND', b'TRX', b'EFM', b'E12', b'P-I', b'INP', b'MID', b'CTR', b'ROM', b'RAM']
     for i, n in enumerate(names):
         put(mc.FAMILY_TABLE + 8 * i, n.ljust(4, b'\0') + (0x251E3E + 0x20 * i).to_bytes(4, 'big'))
@@ -49,6 +49,16 @@ class Machine(unittest.TestCase):
             mc.register_id(m, 15, 0x100FF000)                 # already taken
         with self.assertRaises(img.ImageError):
             mc.register_id(m, 20, 0x100FF000)                 # not a free ID
+        for ident in (29, 95, 114):                            # empty descriptor, but not free
+            with self.assertRaises(img.ImageError):
+                mc.register_id(m, ident, 0x100FF000)
+        class Dsp:                                             # dispatch cells: fallback except type 41
+            def read(self, a):
+                return 0x1F0000 if a - 41 in mc.DISPATCH_TABLES else a & 0xFF000000 or 0x10008E
+        with self.assertRaises(img.ImageError):
+            mc.register_id(m, 40, 0x100FF080, Dsp())          # DSP type 41 in use
+        mc.register_id(m, 41, 0x100FF080, Dsp())               # extra free ID, DSP type 42 unused
+        self.assertEqual(img.mainos_read(m, mc.ID_TABLE + 4 * 41), (0x100FF080).to_bytes(4, 'big'))
         fams = mc.read_families(m)
         self.assertEqual(fams[9][1], 'RAM')
         mc.rename_family(m, 9, 'RAM', 'NFX')
