@@ -160,6 +160,7 @@ This is the input of every neighbour (NFX) machine. Properties:
 | `X:0x000–0x01F` | Scratch **within one call** (stock renderers use it; nothing survives between calls) |
 | The delay-pool slice `0x1D0000 + 0x2000·t` | Per-track ring memory, in builds that reserve the delay pool |
 | Sine table `X/Y:0x148000` | Read-only, 32,768 entries |
+| Internal `X:0x257–0x6FF` | Read-only tables uploaded with the DSP2 stream, shared by convention; the shared tanh table is `X:0x280–0x680` (see [DSP programming](13-dsp-programming.md#internal-memory-tables)). Never written at run time. |
 | Everything else | Not yours: dispatch tables, `Y:0x140–0x162`, other tracks' blocks, sample memory, DMA buffers, MMIO |
 
 Rules for pool memory:

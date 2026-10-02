@@ -58,28 +58,77 @@ the board model this aliasing applies from `0x20000` upwards. Consequences:
 Internal memory (low addresses) is separate per space: `P:0x100`, `X:0x100` and
 `Y:0x100` are three different words.
 
-The internal/external boundary on the real chip depends on the DSP56303 memory
-configuration (OMR memory-switch mode, instruction cache). It has not been read
-from hardware; see [open questions](17-open-questions.md).
+The internal/external boundary depends on the DSP56303 memory configuration,
+which the OS sets at boot (read back in the emulator, which runs the real boot
+code):
+
+| DSP | OMR | Memory switch | Cache | Internal P | Internal X | Internal Y |
+| --- | --- | --- | --- | --- | --- | --- |
+| DSP2 | `0x498D` | on (bit 7) | on (SR bit 19) | `0x000–0x3FF` + 1K-word instruction cache | `0x000–0xBFF` | `0x000–0xBFF` |
+| DSP1 | `0x490D` | off | | `0x000–0xFFF` | `0x000–0x7FF` | `0x000–0x7FF` |
+
+DSP2 gives up internal program RAM to get 3K words each of internal X and Y.
+That is why the voice state blocks at `Y:0x800–0xBFF` are internal. All machine
+code, stock and custom, runs from external SRAM through the 1K cache.
+
+### External bus configuration
+
+Both DSPs program the same address-attribute and bus-control registers at boot
+(DSP2 at `P:0x114–0x135`, caught with monitor watchpoints on the MMIO writes):
+
+| Register | Value | Meaning |
+| --- | --- | --- |
+| AAR0 | `0x100539` | SRAM area `0x100000–0x17FFFF`, P/X/Y |
+| AAR1 | `0x140639` | SRAM area `0x140000–0x17FFFF`, P/X/Y |
+| AAR2 | `0x180539` | SRAM area `0x180000–0x1FFFFF`, P/X/Y |
+| AAR3 | `0x1C0639` | SRAM area `0x1C0000–0x1FFFFF`, P/X/Y |
+| BCR | `0x808421` | Wait states: areas 0–2: 1, area 3: 4 (field layout as in the DSP56300 family manual; not confirmed) |
+
+Every external access pays these wait states on hardware: data reads and
+writes always, and code fetches when they miss the cache. The emulator charges
+none. If area 3's four wait states apply where the areas overlap, the custom
+code region `0x1F0000+` and the delay pool at `0x1D0000` are the slowest
+memory on the board (see [open questions](17-open-questions.md)).
 
 ## DSP2
 
-### Internal and low memory
+### Internal memory
 
 | Address | Use |
 | --- | --- |
 | `P:0x000–0x0FF` | Vectors, dispatcher loop (`P:0x64`), host ISRs (`P:0xE8` receive, `P:0xF4` X readback) |
-| `P:0x13D–0x16C…` | Resident ROM/RAM sample-player code (UW machines) |
-| `X:0x000–0x01F` | Shared scratch used by stock renderers within one call (for example GND-SIN's oscillator block) |
+| `P:0x100–0x3FF` | Resident code: ROM/RAM sample player (`P:0x13D–0x16C…`), interpolation (`P:0x2EB…`) and more. No free words. |
+| `X:0x000–0x0FF` | Scratch used by stock renderers within one call (for example GND-SIN's oscillator block at `0x000–0x01F`) |
 | `X:0x100–0x1FF` | ADC input ring, filled by DMA1 (INP and RAM machines) |
-| `X:0x243` | Master-return ring pointer |
+| `X:0x202–0x256` | Uploaded tables and pointers; `X:0x243` is the master-return ring pointer |
+| **`X:0x257–0x6FF`** | **Unused by OS 1.63** (1,193 words), see below |
 | `X:0x700–0x7FF` | Stereo master return from DSP1 (DMA2) |
+| `X:0x800–0xBFF` | Per-track X state of some stock machines (P-I, sample players) |
+| `Y:0x000–0x0FF` | Scratch used by stock renderers |
 | `Y:0x100–0x11F`, `Y:0x120–0x13F` | The two alternating 32-word voice output banks |
 | `Y:0x140` | Base of the output bank for the current voice |
 | `Y:0x141` | Current voice state pointer |
 | `Y:0x142` | Current track index |
+| `Y:0x143–0x152` | Unused (16 words) |
 | `Y:0x153 + t` | Active DSP type of track `t` |
+| `Y:0x163–0x782` | Read-only 1,568-word table read by `P:0x2EB–0x2FA` (sample-player interpolation coefficients) |
+| `Y:0x783–0x7FE` | Unused (124 words) |
+| `Y:0x7FF` | Read by the dispatcher (`P:0x70`) |
 | `Y:0x800 + 0x40·t` | **Voice state block `S`**, 64 words per track (`Y:0x800–0xBFF`) |
+
+**The free X gap.** Nothing in OS 1.63 uses `X:0x257–0x6FF`:
+- The stock DSP2 upload initialises internal X only up to `0x256`.
+- A trace of every stock machine type saw no access to the gap: every DSP2
+  read, write and DMA transfer, 300k instructions per kit of 16 machines,
+  with trigs.
+- A static scan of all resident DSP2 code (`P:0x000–0x3FF`,
+  `0x100000–0x103C7A`, `0x142100–0x145AF4`) found no address or pointer
+  constant inside it.
+
+It is the only sizeable internal data memory a custom machine can use. Its
+established use is a shared read-only tanh table at `X:0x280–0x680` (see
+[DSP programming](13-dsp-programming.md#internal-memory-tables)). The Y gaps
+are small and, at 16 and 124 words, are best left alone.
 
 ### External memory
 
@@ -116,8 +165,12 @@ Code banks in `0x1F0000–0x1F9FFF` have run on hardware in earlier custom build
 The kit's examples use `0x1F3000` (GND-SW) and `0x1FA000` (NFX-GN).
 
 The emulator also treats `P:0x400–0x4FF` as unused (filled with RTS words). Early
-prototypes placed code there. It is not uploaded by the stock firmware, but its
-availability on hardware is unproven, so current builds do not use it.
+prototypes placed code there. On hardware it is **not internal memory**:
+- DSP2 runs with the memory switch and the cache on, so internal P ends at
+  `0x3FF`.
+- No AAR area covers `0x400`; the lowest starts at `0x100000`.
+
+Do not use it.
 
 ## DSP1
 

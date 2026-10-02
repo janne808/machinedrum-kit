@@ -186,6 +186,28 @@ Check that no stock section overlaps a custom bank or a reserved region. Externa
 alias, so compare every section at or above the alias base regardless of its
 space.
 
+### Internal X data sections
+
+Read-only tables for DSP2 internal X memory go into the same stream, as X
+sections (tag 1). With `mdkit`:
+
+```python
+stream.append_section('X', 0x280, tanh_table)    # mdkit.image DspStream
+```
+
+Rules:
+- **Stay inside the free gap** `X:0x257–0x6FF`. The stock stream's own internal
+  X sections end at `0x256` (`0x202`, `0x203–0x222`, `0x223–0x242`,
+  `0x243–0x24A`, `0x256`); `0x700` up is the master-return ring.
+- **Upload identical sections once.** Several machines may declare the same
+  table. Sections with different contents must not overlap.
+- **Remember the X side when checking overlaps.** Below the alias base, only
+  sections of the same space overlap, so compare internal X sections with the
+  stock X sections, not with P.
+
+The OS loads the whole stream at boot, before any machine runs. Nothing clears
+the gap afterwards: a booted image keeps the table intact under full load.
+
 ### DSP program banks
 
 Give each machine its own `0x1000`-word bank inside the reserved code region
@@ -273,6 +295,8 @@ Before writing the output:
    be low-window pointers, which hang real hardware.
 5. **DSP.** No custom bank overlaps an uploaded section or a reserved region. Entry and
    config words are unchanged. Every dispatch edit found its expected fallback.
+   Internal X sections lie inside `X:0x257–0x6FF` and do not overlap each other
+   unless identical.
 6. **Version** reads back as intended.
 7. **SysEx.** Encode, decode, apply to the stock image; the result equals the
    new image.

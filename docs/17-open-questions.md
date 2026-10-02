@@ -4,9 +4,8 @@
 
 | Question | Why it matters | How to settle it |
 | --- | --- | --- |
-| Real DSP2 wait states and bus configuration (BCR, AAR0–3) | Converts emulator cycles into hardware cycles; sets the real voice limits | Read the registers on hardware (a tiny machine that copies them into its output), or measure a calibrated loop's cost on hardware against the emulator |
-| Instruction-cache behaviour of machine code | Tight loops may be nearly free of wait states and branchy code expensive | Hardware timing of test kernels with different code footprints |
-| DSP56303 internal memory configuration (memory-switch mode, cache) and whether `P:0x400–0x4FF` is free on hardware | Faster internal code space for hot loops | Read OMR/SR on hardware; test a machine placed there |
+| Decoding of the boot-time bus configuration (BCR `0x808421`, AAR0–3, see [memory maps](02-memory-maps.md#external-bus-configuration)): the BCR field widths, and which area's wait states apply where AAR areas overlap (`0x1C0000–0x1FFFFF` is in areas 2 and 3) | Whether the custom code region and the delay pool pay 4 wait states instead of 1; whether moving code below `0x1C0000` would make it faster | Check the DSP56303 user manual; time the same test loop placed below and above `0x1C0000` on hardware |
+| Instruction-cache behaviour of machine code (1K words; 8 sectors of 128 words with LRU replacement, per the family manual) | Tight loops are nearly free of wait states after the first pass; with 16 machines per block each render probably starts mostly cold | Hardware timing of test kernels with different code footprints |
 | Top of DSP2 external SRAM and banks `0x1FA000–0x1FFFFF` | More room for code and tables | Place a canary machine there on hardware |
 | Descriptor "format" bytes `+50..+53` and the tail `+54..+85` | Custom display formats for knob values | Vary the bytes and observe the LCD |
 | When exactly the OS reruns control handlers | Handlers with expensive work; tempo-synced parameters | Breakpoint the handler during sequencer playback, tempo changes, trigs |

@@ -105,6 +105,9 @@ one-pole smoothers all need this.
   long move. Use them to load the next operands while computing. The moves use
   the old register values.
 - **`X:0x00–0x1F`** is free scratch within one call.
+- **Hot tables belong in internal memory.** Every external data access pays
+  bus wait states on hardware, on every access; code fetches mostly hit the
+  instruction cache. See [internal-memory tables](#internal-memory-tables).
 
 ## Speed techniques
 
@@ -115,7 +118,8 @@ These gave the large savings in the existing machines (typically 2–4×):
 | **Fast-path screens** | PolyBLEP needs a correction only near a discontinuity. One `cmpm` of the raw saw against a per-block threshold decides "no edge" in one instruction; the rare edge case jumps to a subroutine. |
 | **Per-block work instead of per-sample** | Compute coefficients, reciprocals and envelope targets once per block. For example, a VCA as one linear gain ramp per block instead of a slew per sample: 182 instead of 510 cycles. |
 | **Avoid `div`** | A 24-step `div` costs about 24 cycles plus setup. Precompute a per-block reciprocal on the DSP, or a coefficient on the ColdFire. |
-| **Lookup + interpolation instead of rational functions** | A 2,048-interval table of a Padé saturator, interpolated linearly, replaced two divisions per sample. Index and fraction come from one magnitude via a mask and a parallel move. |
+| **Lookup + interpolation instead of rational functions** | A 2,048-interval table of a Padé saturator, interpolated linearly, replaced two divisions per sample. Index and fraction come from one magnitude via a mask and a parallel move. Keep per-sample tables in internal X ([below](#internal-memory-tables)). |
+| **Block-rate envelopes** | Advance an exponential AD envelope once per block by its exact 32-sample step `e = 1 − (1 − k)^32`, computed as five rounds of `e ← 2e − e²` on the accumulator, and ramp the parameters it drives linearly across the block. This replaces about 30 cycles per sample of envelope and parameter passes with about 4. |
 | **Specialized loops** | One loop per mode or envelope state, selected once per block (indirect jump), instead of per-sample branching. |
 | **Branchless state machines** | `Tcc` switches envelope stage handlers at the peak or snap point without a branch. |
 | **Two-pass render** | Pass 1 writes a per-sample modulation array (for example the cutoff) into the output bank; pass 2 reads each word and overwrites it with the output. No X memory needed. |
@@ -127,6 +131,82 @@ case a control word changed from unsigned to signed. A `feedback ≥ 0` guard
 then sent every setting to the slow reference loop, about 3.2× the cycles. The
 emulator passed everything; hardware overran and went silent. Add
 **cycle-ceiling tests** for the fast paths at every control setting.
+
+## Internal-memory tables
+
+**Why.** Hardware measurements showed that external data reads are the main
+cost the emulator does not see:
+- A 2×-oversampled ladder filter read 128 words per block from a table in its
+  P bank, through the external alias. 8 enveloped instances fitted on
+  hardware, against 15 in the emulator.
+- The same machine with the table moved into internal X fitted 13.
+- With a block-rate envelope as well, it fitted 15: a full kit after one
+  oscillator.
+- A dual oscillator with no external data reads matched the emulator: 16
+  instances.
+
+**Where.** `X:0x257–0x6FF` is free internal X memory, 1,193 words (see
+[memory maps](02-memory-maps.md#internal-memory)). Upload tables there as X
+sections of the DSP2 stream (see [packing](12-packing-firmware.md#internal-x-data-sections)).
+Machines read them with `x:(r)`, so the lookup can run in parallel with Y
+moves. Never write them at run time.
+
+**The shared tanh table.** `X:0x280–0x680` holds 1,025 words:
+
+```python
+T = [round(2**23 * math.tanh(8 * i / 1024)) for i in range(1025)]   # tanh(8u), u = 0..1
+```
+
+- **Accuracy:** with linear interpolation, the worst error against `tanh` over
+  0 ≤ x < 8 is 55 LSB (−103.7 dBFS).
+- **Range:** `tanh(8)` = 1 − 2·10⁻⁷, so clamping at x = 8 costs nothing.
+- **Odd symmetry:** only magnitudes are stored, and the lookup applies the sign
+  afterwards.
+- **Sharing:** every machine that wants tanh, or a scaled tanh, uses the same
+  words. The packer uploads identical sections once.
+
+**Lookup.** Bring the argument to `x/8` in accumulator A (1.0 = `2^47`). Then:
+
+```asm
+; In: A = x/8 (48-bit, any sign). N3 = $1FFF, N4 = $280.
+; Out: A = +-tanh(x) (Q23, floored), A0 = 0. Uses B, X0, Y0, Y1, R4, N5.
+        abs a           a2,n5         ; |x/8|; capture the sign
+        move a,y1                     ; limited: |x| >= 8 reads as $7FFFFF (last entry)
+        tfr y1,b        n3,x0
+        mpy y1,#13,a                  ; index = top 10 bits (A1)
+        and x0,b        a1,r4
+        asl #10,b,b                   ; fraction = low 13 bits, as Q23
+        move (r4)+n4
+        move x:(r4)+,x0 b,y0          ; T[i]
+        move x:(r4),y1                ; T[i+1]
+        mpy y0,y1,a
+        mac -y0,x0,a    x0,b
+        add b,a         n5,b          ; T[i] + f (T[i+1] - T[i])
+        tst b           a1,a          ; floor
+        neg a ifmi                    ; sign
+```
+
+That is 14 single-word instructions, 15 with the `asl` that usually brings an
+`x/16` argument to `x/8`.
+
+**Clamp.** The clamp costs nothing: moving the accumulator to Y1 saturates any
+value at or above 1.0 to `$7FFFFF`. That indexes entry 1,023 with the largest
+fraction, which interpolates to the last entry.
+
+**Scaled saturators.** For a saturator `g(m) = (C/2)·tanh(2m/C)` with the
+ceiling a power of two below full scale:
+1. Shift the magnitude so that 2m/C = 8 lands at 1.0.
+2. Shift the interpolated result right before applying the sign. For example,
+   `asr #5,a,a` gives a ceiling of full scale/32.
+
+Both curves keep slope 1 at zero.
+
+**Verification.** A kernel model of this lookup must reproduce three
+behaviours: the limiter on the move to Y1, the truncation to the index and
+fraction, and the floor of the interpolated value. Exercise the clamp in at
+least one bit-exact case. If no knob setting reaches it, start a case from
+out-of-range state. The emulator places internal X like any other memory, so
+loading the table into the kernel runner's X memory is enough.
 
 ## The stock sine table
 
@@ -155,8 +235,15 @@ compute sines or upload your own table.
 - In the emulator, a heavy 16-voice kit around 62–63k cycles still meets the
   deadline, with about 11k cycles of slack left in DSP1. **Hardware is slower**:
   the emulator charges no external-memory wait states, and the machine code runs
-  from external SRAM. How much slower has not been measured. Leave margin and
-  test on hardware with the intended voice count.
+  from external SRAM. Two calibration points so far:
+  - A dual oscillator with no external data reads ran 16 instances on hardware
+    at about 62.5k emulated.
+  - A filter reading 128 table words per block from external memory hid
+    roughly 730–1,560 extra hardware cycles per voice.
+
+  Count external data accesses per render (monitor `trace cpu`), keep hot
+  tables internal, leave margin, and test on hardware with the intended voice
+  count.
 - Measure a render's cost as the cycle count between the dispatcher's call
   (`P:0xB4`) and return (`P:0xB5`). Sum per track and compare the totals and
   the worst block with the budget.
@@ -172,6 +259,6 @@ As rough guidance from other custom machines built the same way:
 | --- | ---: |
 | Modulated delay (chorus/flanger) | ~1,500 |
 | Delay with filtered feedback (fast path) | ~1,750 |
-| Filter with an envelope | ~3,000 |
+| Filter with an envelope (internal tanh table, block-rate envelope) | ~2,700 |
 | Dual oscillator with PWM and LFO | ~3,900 |
-| Oversampled ladder filter | ~4,200 |
+| 2× oversampled ladder filter with an envelope (internal tanh table, block-rate envelope) | ~3,500 |
