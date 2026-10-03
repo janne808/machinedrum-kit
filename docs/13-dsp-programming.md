@@ -106,8 +106,10 @@ one-pole smoothers all need this.
   the old register values.
 - **`X:0x00–0x1F`** is free scratch within one call.
 - **Hot tables belong in internal memory.** Every external data access pays
-  bus wait states on hardware, on every access; code fetches mostly hit the
-  instruction cache. See [internal-memory tables](#internal-memory-tables).
+  bus wait states on hardware: about 6 cycles per access in area 3
+  (`0x1C0000+`, the code region and delay pool) and about 2 in areas 0–2
+  ([measured](02-memory-maps.md#measured-wait-states-hardware-dsp2)). Code
+  fetches mostly hit the instruction cache; a miss costs the same. See [internal-memory tables](#internal-memory-tables).
 
 ## Speed techniques
 
@@ -254,6 +256,11 @@ compute sines or upload your own table.
     at about 62.5k emulated.
   - A filter reading 128 table words per block from external memory hid
     roughly 730–1,560 extra hardware cycles per voice.
+  - Measured directly: about 5 wait states per access and per code-fetch miss
+    in area 3, and about 1 in areas 0–2
+    ([memory maps](02-memory-maps.md#measured-wait-states-hardware-dsp2)).
+    Estimate the hardware cost as emulated cycles + 5 × (area-3 data accesses
+    + cache-missing instruction fetches).
 
   Count external data accesses per render (monitor `trace cpu`), keep hot
   tables internal, leave margin, and test on hardware with the intended voice

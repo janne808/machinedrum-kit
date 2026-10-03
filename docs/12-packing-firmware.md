@@ -122,6 +122,13 @@ the slot. The guards also catch oversized banks already stored on the device.
 | **Code region** | `0x1F0000` | `0x120000` / `0x140000` | `0x0D0600` / `0x0E0000` | The kit's examples: custom DSP banks at `0x1F0000–0x1FFFFF`, all stock machines kept |
 | **Delay pool + code** | `0x1D0000` | `0x0E0000` / `0x100000` | `0x090600` / `0x0A0000` | Delay-line machines: 16 × `0x2000`-word per-track rings at `0x1D0000–0x1EFFFF`, then the code region. Usually combined with removing the RAM machines (below). |
 
+Both reservations put custom memory in DSP2 bus area 3 (`0x1C0000+`), which
+costs about 5 wait states per access and per code-fetch miss on hardware,
+against about 1 below `0x1C0000`
+([measured](02-memory-maps.md#measured-wait-states-hardware-dsp2)). Machines
+that are heavy in external accesses run faster from a lower `R`, at the cost of
+sample capacity (not yet tested on hardware, see [open questions](17-open-questions.md)).
+
 `mdkit.machine.sample_reservation(R)` computes the values, and
 `reserve_sample_memory()` applies them. With `R = 0x1F0000` the 48-ROM RAM
 partition was measured to end at `0x1EFFFE`, and RAM-R1 still records into its

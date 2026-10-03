@@ -29,7 +29,7 @@ The instrumentation adds:
 
 | Difference | Effect | Mitigation |
 | --- | --- | --- |
-| **No external-memory wait states.** The cycle function accepts a wait-state count but never applies it; the bus-control register is not modelled. The OS programs 1–4 wait states ([memory maps](02-memory-maps.md#external-bus-configuration)). | DSP cycle counts are optimistic, most of all for external data reads (tables in a P bank, delay pools), which pay on every access. | Keep hot tables in internal X; count external accesses per render; test voice counts on hardware; cycle-ceiling tests. |
+| **No external-memory wait states.** The cycle function accepts a wait-state count but never applies it; the bus-control register is not modelled. Measured on hardware: about 1 wait state in areas 0–2 and about 5 in area 3 (`0x1C0000+`), the area holding the code region and the delay pool ([memory maps](02-memory-maps.md#measured-wait-states-hardware-dsp2)). | DSP cycle counts are optimistic, most of all for external data reads (tables in a P bank, delay pools), which pay on every access. | Keep hot tables in internal X; count external accesses per render; test voice counts on hardware; cycle-ceiling tests. |
 | **No instruction cache model.** DSP2 enables its cache at boot (SR CE bit, then `pflush`); the emulator has a cache model that is never used for fetches or timing. | Hardware penalizes cache misses and rewards tight loops; the emulator does neither. Runtime-written P code would run stale on hardware until `pflush`, but fresh in the emulator. | Keep inner loops compact; never rely on writing P memory at runtime. |
 | **Flash visible at both `0x0` and `0x10000000`.** CSAR0 is ignored. | Images with low-window flash pointers boot in the emulator and **hang on hardware**. | Link and point through `0x10000000`; scan images for low pointers; optionally watch reads of `0x0–0xFFFFF` after the remap (`0x2002F2`). |
 | **P/X/Y alias from `0x20000`** | Real decode depends on the address-attribute registers, which were not read from hardware. | Addresses used so far behave the same on hardware. |
@@ -139,6 +139,7 @@ off.
 | After the fix, the same kit plus six more delay instances ran clean | Fast path restored, output bit-identical | Cycle-ceiling tests now guard it |
 | Buffer underfills with 15 enveloped instances of a 2× ladder filter that fitted easily in the emulator; 8 was the limit | 128 reads per block from a table in the machine's P bank, through the external alias. A 16-voice oscillator kit with no external reads, at the same emulated load, ran clean. | No wait states |
 | The same filter with its table in internal X: 13 instances. With a block-rate envelope as well: 15, a full kit | External reads gone; per-sample envelope work cut | Emulator cost rose by 64 cycles per voice (one extra instruction per lookup) while hardware improved |
+| A two-track reverb (about 600 delay-pool accesses per block, code about 1K words) fitted seven instances in the emulator at about 6,750 cycles each. On hardware two ran; the third underran and the fourth locked the unit up | Area 3 costs about 5 wait states per data access and per code-fetch miss ([measured](02-memory-maps.md#measured-wait-states-hardware-dsp2)). That roughly doubles this machine's cost | No wait states, no cache model |
 
 Test order for a new image:
 

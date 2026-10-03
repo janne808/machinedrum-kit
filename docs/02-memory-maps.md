@@ -82,13 +82,46 @@ Both DSPs program the same address-attribute and bus-control registers at boot
 | AAR1 | `0x140639` | SRAM area `0x140000–0x17FFFF`, P/X/Y |
 | AAR2 | `0x180539` | SRAM area `0x180000–0x1FFFFF`, P/X/Y |
 | AAR3 | `0x1C0639` | SRAM area `0x1C0000–0x1FFFFF`, P/X/Y |
-| BCR | `0x808421` | Wait states: areas 0–2: 1, area 3: 4 (field layout as in the DSP56300 family manual; not confirmed) |
+| BCR | `0x808421` | Wait states: areas 0–2: 1, area 3: 4 (field layout as in the DSP56300 family manual). Measured on hardware: below. |
 
 Every external access pays these wait states on hardware: data reads and
 writes always, and code fetches when they miss the cache. The emulator charges
-none. If area 3's four wait states apply where the areas overlap, the custom
-code region `0x1F0000+` and the delay pool at `0x1D0000` are the slowest
-memory on the board (see [open questions](17-open-questions.md)).
+none.
+
+#### Measured wait states (hardware, DSP2)
+
+A calibration machine read COUNT words per block in a one-instruction loop (the
+loop stays in the cache, so only the data access is timed) from a chosen
+address. It then ran a straight-line block of up to 2,032 NOPs from its own
+bank at `0x1F3000`. The block is larger than the 1K cache, so every NOP is a
+cache miss. COUNT went up in steps of 256 reads until underruns were audible,
+with GND-SIN, the calibration machine and 14 empty tracks:
+
+| Test | First underrun (×256 reads) | Cycles per access | Wait states |
+| --- | ---: | ---: | ---: |
+| Internal Y RAM (reference) | 71 | 1 | 0 |
+| `0x120000` (area 0) | 36 | ≈ 2.0 | ≈ 1 |
+| `0x1A0000` (area 2) | 36 | ≈ 2.0 | ≈ 1 |
+| `0x1E0000` (area 3) | 12 | ≈ 5.9 | ≈ 5 |
+| Code fetch from `0x1F3000` (area 3), cache miss: 2,032 NOPs, internal reads | 23 | ≈ 6.0 per instruction | ≈ 5 |
+
+- cycles per access ≈ COUNT_internal / COUNT_x;
+- code-fetch cost ≈ (COUNT_internal − COUNT_code) / 2,032.
+
+What the measurements show:
+- **Area 3 wins the overlap.** `0x1C0000–0x1FFFFF` lies in both AAR2 and AAR3,
+  and accesses there pay area 3's cost. The cost is about 5 wait states, against
+  the 4 that the BCR decodes to; the extra cycle is not explained.
+- **Area 3 is the slowest memory DSP2 has.** It holds the code region
+  `0x1F0000+` and the delay pool `0x1D0000`. There, every external data access and every cache
+  miss costs about 6 cycles, three times the cost in areas 0–2.
+- **Stock code loses little.** The emulator's first underrun was at 75, against
+  71 on hardware. So the stock kit loses only about 1,000 cycles per block to wait
+  states and cache misses.
+
+Custom memory below `0x1C0000` (area 2) is three times faster per access.
+Moving it there means reserving more sample memory: see
+[packing firmware](12-packing-firmware.md#reserving-sample-memory).
 
 ## DSP2
 
