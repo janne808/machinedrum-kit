@@ -4,10 +4,10 @@
 including RAM recording and playback, stay available.
 
 The build:
-  - reserves DSP2 memory from 0x1F0000 up for custom code (sample budgets +
+  - reserves DSP2 memory from 0x1B0000 up for custom code (sample budgets +
     loader guards; RAM machines keep working with slightly less memory);
   - relocates the family table to flash and appends an eleventh family, NFX;
-  - adds NFX-GN as firmware ID 15 / DSP type 16, code at P:0x1FA000;
+  - adds NFX-GN as firmware ID 15 / DSP type 16, code at P:0x1BA000;
   - writes machinedrum-nfx-gn.bin, .syx and build.json.
 
   python3 build.py --firmware elektron_sps1-1uw_os1.63.bin \
@@ -25,8 +25,8 @@ from mdkit import image as img, machine as mc, sysex, toolchain  # noqa: E402
 
 ID = 15
 DSP_TYPE = ID + 1
-CODE_REGION = mc.CODE_REGION             # 0x1F0000: reserved from here up
-DSP_BANK, DSP_CAPACITY = 0x1FA000, 0x1000
+CODE_REGION = mc.CODE_REGION             # 0x1B0000: reserved from here up
+DSP_BANK, DSP_CAPACITY = 0x1BA000, 0x1000
 FLASH_BANK = 0xFF000
 TABLE_OFF, MENU_OFF, DESC_OFF, CODE_OFF = 0x000, 0x060, 0x080, 0x200
 

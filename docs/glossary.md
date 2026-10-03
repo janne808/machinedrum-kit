@@ -20,8 +20,8 @@
 | **NFX** | Neighbour-effect family, added by the NFX-GN example as an eleventh family |
 | **Packet** | Control words the handler produces, written to `Y:S+1…` |
 | **Pending word** | `Y:S`, set to the DSP type by a trig; makes the dispatcher call update (and init on a type change) |
-| **Delay pool** | Optional per-track ring memory for delay-line machines at DSP2 `0x1D0000–0x1EFFFF`, reserved from sample memory |
-| **Code region** | DSP2 `0x1F0000–0x1FFFFF`, reserved from sample memory for custom machine code |
+| **Delay pool** | Optional per-track ring memory for delay-line machines at DSP2 `0x190000–0x1AFFFF`, reserved from sample memory |
+| **Code region** | DSP2 `0x1B0000–0x1BFFFF` (bus area 2), reserved from sample memory for custom machine code |
 | **Producer pass** | DSP2's per-block loop over the 16 tracks |
 | **Q23** | Signed 24-bit fraction, `w / 2^23` |
 | **Raw word** | 16-bit knob value passed to a handler, about `value << 7`, slewed by the OS |

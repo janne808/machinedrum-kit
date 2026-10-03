@@ -50,8 +50,10 @@ BUDGET_SITES = {
 GUARD_A_SITE, GUARD_A_OLD = 0x20D2A8, bytes.fromhex('2f410030701f')
 GUARD_B_SITE, GUARD_B_OLD = 0x20D7E2, bytes.fromhex('2d41ffe46f0002a6')
 SAMPLE_BASE_GLOBAL = 0x29F38E       # read by the guards
-DELAY_POOL = (0x1D0000, 0x20000)    # optional per-track delay rings (16 x 0x2000 words)
-CODE_REGION = 0x1F0000              # reserved for custom DSP banks by the examples
+# Both sit in DSP2 bus area 2 (below 0x1C0000, about 1 wait state). Area 3
+# (0x1C0000 up) costs about 5 per access and per code-fetch miss on hardware.
+DELAY_POOL = (0x190000, 0x20000)    # optional per-track delay rings (16 x 0x2000 words)
+CODE_REGION = 0x1B0000              # reserved for custom DSP banks (16 x 0x1000 words) by the examples
 
 
 def sample_reservation(reserve_from):

@@ -353,8 +353,8 @@ firmware or board model involved. It is fast (thousands of blocks per second)
 and supports both DSP engines.
 
 ```sh
-md-kernel --program code.bin --bank 0x1F3000 \
-          --init 0x1F3000 --update 0x1F3001 --render 0x1F300A \
+md-kernel --program code.bin --bank 0x1B3000 \
+          --init 0x1B3000 --update 0x1B3001 --render 0x1B300A \
           --input in.bin --output out.bin --packet 4 \
           [--track 1] [--engine jit|interpreter] [--pool BASE:WORDS] \
           [--load Y:0x148000:table.bin] [--max-steps N]

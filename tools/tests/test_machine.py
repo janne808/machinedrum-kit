@@ -90,12 +90,17 @@ class Machine(unittest.TestCase):
             mc.add_program(s, 0x1FB000, 4, [0] * 5)            # too big
 
     def test_sample_reservation(self):
-        code = mc.sample_reservation(0x1F0000)
-        self.assertEqual((code['48-ROM']['rom'], code['48-ROM']['total']), (0x120000, 0x140000))
-        self.assertEqual((code['32-ROM']['rom'], code['32-ROM']['total']), (0x0D0600, 0x0E0000))
-        pool = mc.sample_reservation(0x1D0000)              # delay pool + code region
-        self.assertEqual((pool['48-ROM']['rom'], pool['48-ROM']['total']), (0x0E0000, 0x100000))
-        for plan in (code, pool):                           # stock RAM minimum kept (or more)
+        self.assertEqual(mc.CODE_REGION, mc.DELAY_POOL[0] + mc.DELAY_POOL[1])   # pool directly below the code
+        code = mc.sample_reservation(mc.CODE_REGION)        # 0x1B0000, bus area 2
+        self.assertEqual((code['48-ROM']['rom'], code['48-ROM']['total']), (0x0A0000, 0x0C0000))
+        self.assertEqual((code['32-ROM']['rom'], code['32-ROM']['total']), (0x050600, 0x060000))
+        pool = mc.sample_reservation(mc.DELAY_POOL[0])      # delay pool + code region, 0x190000
+        self.assertEqual((pool['48-ROM']['rom'], pool['48-ROM']['total']), (0x060000, 0x080000))
+        self.assertEqual((pool['32-ROM']['rom'], pool['32-ROM']['total']), (0x010600, 0x020000))
+        old = mc.sample_reservation(0x1F0000)               # the earlier area-3 code region
+        self.assertEqual((old['48-ROM']['rom'], old['48-ROM']['total']), (0x120000, 0x140000))
+        self.assertEqual((old['32-ROM']['rom'], old['32-ROM']['total']), (0x0D0600, 0x0E0000))
+        for plan in (code, pool, old):                           # stock RAM minimum kept (or more)
             self.assertGreaterEqual(plan['48-ROM']['total'] - plan['48-ROM']['rom'], 0x15F400 - 0x140000)
             self.assertEqual(plan['32-ROM']['total'] - plan['32-ROM']['rom'], 0x0FFFF0 - 0x0F05F0)
         with self.assertRaises(img.ImageError):
@@ -104,15 +109,15 @@ class Machine(unittest.TestCase):
     def test_reserve_sample_memory_keeps_ram_machines(self):
         m = fake_mainos()
         ids_before = img.mainos_read(m, mc.ID_TABLE, 4 * 192)
-        mc.reserve_sample_memory(m, 0x1F0000, 0x100FF222, 0x100FF256)
-        self.assertEqual(img.mainos_read(m, 0x200376, 2), bytes([0x70, 0x12]))
-        self.assertEqual(img.mainos_read(m, 0x200382), (0x140000).to_bytes(4, 'big'))
-        self.assertEqual(img.mainos_read(m, 0x2003B6), (0x0E0000).to_bytes(4, 'big'))
+        mc.reserve_sample_memory(m, mc.CODE_REGION, 0x100FF222, 0x100FF256)
+        self.assertEqual(img.mainos_read(m, 0x200376, 2), bytes([0x70, 0x0A]))
+        self.assertEqual(img.mainos_read(m, 0x200382), (0x0C0000).to_bytes(4, 'big'))
+        self.assertEqual(img.mainos_read(m, 0x2003B6), (0x060000).to_bytes(4, 'big'))
         self.assertEqual(img.mainos_read(m, mc.GUARD_A_SITE, 6), bytes.fromhex('4eb9100ff222'))
         self.assertEqual(img.mainos_read(m, mc.GUARD_B_SITE, 8), bytes.fromhex('4eb9100ff2564e71'))
         self.assertEqual(img.mainos_read(m, mc.ID_TABLE, 4 * 192), ids_before)   # RAM machines untouched
         with self.assertRaises(img.ImageError):
-            mc.reserve_sample_memory(m, 0x1F0000, 0, 0)     # already applied
+            mc.reserve_sample_memory(m, mc.CODE_REGION, 0, 0)  # already applied
 
     def test_lod(self):
         lod = '\n'.join(['P 1FA000 00000C', 'P 1FA001 00000C', 'P 1FA002 00000C',

@@ -112,9 +112,11 @@ What the measurements show:
 - **Area 3 wins the overlap.** `0x1C0000–0x1FFFFF` lies in both AAR2 and AAR3,
   and accesses there pay area 3's cost. The cost is about 5 wait states, against
   the 4 that the BCR decodes to; the extra cycle is not explained.
-- **Area 3 is the slowest memory DSP2 has.** It holds the code region
-  `0x1F0000+` and the delay pool `0x1D0000`. There, every external data access and every cache
-  miss costs about 6 cycles, three times the cost in areas 0–2.
+- **Area 3 is the slowest memory DSP2 has.** Every external data access and
+  every cache miss there costs about 6 cycles, three times the cost in areas
+  0–2. Earlier builds kept the code region (`0x1F0000+`) and the delay pool
+  (`0x1D0000`) there. The kit now reserves both in area 2
+  ([custom-machine regions](#custom-machine-regions)).
 - **Stock code loses little.** The emulator's first underrun was at 75, against
   71 on hardware. So the stock kit loses only about 1,000 cycles per block to wait
   states and cache misses.
@@ -201,16 +203,20 @@ are small and, at 16 and 124 words, are best left alone.
 
 Stock sample memory extends to about `0x1FFA00` (48-ROM) or `0x1FFFF8` (32-ROM),
 so custom memory must be **reserved** from it first (see
-[packing firmware](12-packing-firmware.md#reserving-sample-memory)). Two
-reservations are in use:
+[packing firmware](12-packing-firmware.md#reserving-sample-memory)). Both
+regions sit in bus area 2, below `0x1C0000`, where an external access costs
+about 1 wait state instead of about 5
+([measured](#measured-wait-states-hardware-dsp2)). Sample memory is one
+contiguous range, so area 3 (`0x1C0000–0x1FFFFF`) above them stays unused:
 
 | Region | Reserved by | Use |
 | --- | --- | --- |
-| `0x1F0000–0x1FFFFF` | **Code region**: lower sample budgets + loader guards with ceiling `0x1F0000`. All stock machines stay, and RAM recording keeps working with 64K words less memory. | Custom DSP program banks, `0x1000` words each |
-| `0x1D0000–0x1EFFFF` | **Delay pool** (optional): reserve from `0x1D0000`. Delay-line machines need this much; builds that use it usually give up the RAM machines to free the space. | 16 × `0x2000`-word per-track delay rings (`0x1D0000 + 0x2000·t`) |
+| `0x1B0000–0x1BFFFF` | **Code region**: lower sample budgets + loader guards with ceiling `0x1B0000`. All stock machines stay. The ROM budget and RAM recording memory both shrink (see [packing](12-packing-firmware.md#reserving-sample-memory)). | Custom DSP program banks, `0x1000` words each |
+| `0x190000–0x1AFFFF` | **Delay pool** (optional): reserve from `0x190000`. Delay-line machines need this much; builds that use it usually give up the RAM machines to free the space. | 16 × `0x2000`-word per-track delay rings (`0x190000 + 0x2000·t`) |
 
-Code banks in `0x1F0000–0x1F9FFF` have run on hardware in earlier custom builds.
-The kit's examples use `0x1F3000` (GND-SW) and `0x1FA000` (NFX-GN).
+Code banks in `0x1B0000–0x1BAFFF` and the pool at `0x190000` have run on
+hardware. The kit's examples use `0x1B3000` (GND-SW) and `0x1BA000` (NFX-GN).
+Earlier builds used `0x1F0000+` for code and `0x1D0000` for the pool, in area 3.
 
 The emulator also treats `P:0x400–0x4FF` as unused (filled with RTS words). Early
 prototypes placed code there. On hardware it is **not internal memory**:

@@ -20,7 +20,7 @@ meaning (see [custom machine reference](../../../docs/14-custom-machine-referenc
 
 | File | Contents |
 | --- | --- |
-| `machine.s` | DSP2 code, 171 words at `P:0x1F3000`. A cycle-optimized kernel generated from a simpler reference, and bit-exact with it. |
+| `machine.s` | DSP2 code, 171 words at `P:0x1B3000`. A cycle-optimized kernel generated from a simpler reference, and bit-exact with it. |
 | `control.s`, `pitch.inc` | ColdFire handler and its 128-entry MIDI phase-step table (`generate_pitch.py` rewrites it) |
 | `../common/guards.s` | Sample-loader guards for the code-region reservation |
 | `build.py` | The build |
@@ -36,18 +36,18 @@ What the build changes:
 | --- | --- |
 | MainOS GND family | List pointer `0x25239A`: stock list → `[GND---, SIN, NS, IM, SW, 0]` at flash `0xFF100` |
 | MainOS ID table | ID 8 → the GND-SW descriptor at flash `0xFF000` |
-| MainOS sample budgets, two loader sites | Code region reserved from DSP2 `0x1F0000` up: 48-ROM budgets `0x120000`/`0x140000`, 32-ROM `0x0D0600`/`0x0E0000`, guards with ceiling `0x1F0000` |
+| MainOS sample budgets, two loader sites | Code region reserved from DSP2 `0x1B0000` up (bus area 2): 48-ROM budgets `0x0A0000`/`0x0C0000`, 32-ROM `0x050600`/`0x060000`, guards with ceiling `0x1B0000` |
 | DSP2 dispatch | Type 9 → GND-SW entries |
-| DSP2 upload | P section at `0x1F3000` |
+| DSP2 upload | P section at `0x1B3000` |
 | Flash `0xFF200` | ColdFire code (handler + guards), linked at `0x100FF200` |
 
 ## Verified
 
 In the emulator, booting the built image:
 
-- **Budgets:** the startup budgets read `0x120000`/`0x140000` (48-ROM branch).
+- **Budgets:** the startup budgets read `0x0A0000`/`0x0C0000` (48-ROM branch).
   The four RAM slots are laid out by the stock partition formula; the last one
-  ends at `0x1EFFFE`, below the code region.
+  ends at `0x1AFFFE`, below the code region.
 - **RAM machines:** the RAM family and all RAM IDs are unchanged. **RAM-R1
   records**: it starts in its staging area, hands off to its slot at
   `0x18FC12`, and its recorded length grows.

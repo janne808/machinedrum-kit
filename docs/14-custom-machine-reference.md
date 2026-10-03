@@ -11,10 +11,10 @@ are higher.
 
 | Machine | ID / DSP type | Family | DSP bank | Kind | Cost |
 | --- | --- | --- | --- | --- | ---: |
-| GND-SW | 8 / 9 | GND (fifth entry) | `0x1F3000` | Generator | 734 default, 2,341 at note 127 with maximum ramp |
-| NFX-GN | 15 / 16 | NFX (new eleventh family) | `0x1FA000` | Neighbour effect | 154 |
+| GND-SW | 8 / 9 | GND (fifth entry) | `0x1B3000` | Generator | 734 default, 2,341 at note 127 with maximum ramp |
+| NFX-GN | 15 / 16 | NFX (new eleventh family) | `0x1BA000` | Neighbour effect | 154 |
 
-Both use the code-region reservation from `0x1F0000` (see
+Both use the code-region reservation from `0x1B0000`, in bus area 2 (see
 [packing](12-packing-firmware.md#reserving-sample-memory)). Neither needs
 sample memory beyond its code bank, and all stock machines stay.
 

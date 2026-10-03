@@ -4,10 +4,10 @@ fifth GND machine. All stock machines, including RAM recording and playback,
 stay available.
 
 The build:
-  - reserves DSP2 memory from 0x1F0000 up for custom code: lowers the two
+  - reserves DSP2 memory from 0x1B0000 up for custom code: lowers the two
     startup sample budgets and guards the ROM-sample loaders;
-    RAM machines keep working with 0x10000 words less recording memory;
-  - uploads the DSP code at P:0x1F3000 and points DSP type 9 at it;
+    RAM machines keep working;
+  - uploads the DSP code at P:0x1B3000 and points DSP type 9 at it;
   - registers firmware ID 8 and appends GND-SW to the GND menu;
   - writes machinedrum-gnd-sw.bin, .syx and build.json.
 
@@ -26,8 +26,8 @@ from mdkit import image as img, machine as mc, sysex, toolchain  # noqa: E402
 
 ID = 8
 DSP_TYPE = ID + 1
-CODE_REGION = mc.CODE_REGION             # 0x1F0000: reserved from here up
-DSP_BANK, DSP_CAPACITY = 0x1F3000, 0x1000
+CODE_REGION = mc.CODE_REGION             # 0x1B0000: reserved from here up
+DSP_BANK, DSP_CAPACITY = 0x1B3000, 0x1000
 FLASH_BANK = 0xFF000                      # file offset of the 4 KiB flash bank
 DESC_OFF, MENU_OFF, CODE_OFF = 0x000, 0x100, 0x200
 

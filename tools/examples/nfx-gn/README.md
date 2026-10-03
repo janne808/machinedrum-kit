@@ -8,7 +8,7 @@ families and machines stay, RAM included.
 
 | File | Contents |
 | --- | --- |
-| `machine.s` | DSP2 code (23 words at `P:0x1FA000`) |
+| `machine.s` | DSP2 code (23 words at `P:0x1BA000`) |
 | `control.s` | ColdFire control handler |
 | `../common/guards.s` | Sample-loader guards for the code-region reservation |
 | `build.py` | Assembles and links, applies every edit through `mdkit`, packs, checks, writes `.bin`, `.syx` and `build.json` |
@@ -24,9 +24,9 @@ What the build changes:
 | --- | --- |
 | MainOS family table | Copied to flash `0xFF000` with an eleventh family `NFX` (menu `[NFX-GN]` at `0xFF060`); the eight table references repointed |
 | MainOS ID table | ID 15 → the NFX-GN descriptor (`0xFF080`) |
-| MainOS sample budgets, two loader sites | Code region reserved from DSP2 `0x1F0000` up |
+| MainOS sample budgets, two loader sites | Code region reserved from DSP2 `0x1B0000` up (bus area 2) |
 | DSP2 dispatch | Type 16 → NFX-GN entries |
-| DSP2 upload | P section at `0x1FA000` |
+| DSP2 upload | P section at `0x1BA000` |
 | Flash `0xFF200` | ColdFire code (handler + guards), linked at `0x100FF200` |
 
 ## Verified

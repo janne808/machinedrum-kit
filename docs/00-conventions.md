@@ -11,7 +11,7 @@
   see [memory maps](02-memory-maps.md#the-cs0-remap)). The text says "flash
   offset" or "CPU address" explicitly.
 - **DSP addresses are 24-bit word addresses**, written with the space:
-  `P:0x1F3000`, `X:0x148000`, `Y:0x800`. P, X and Y are separate spaces for
+  `P:0x1B3000`, `X:0x148000`, `Y:0x800`. P, X and Y are separate spaces for
   internal memory. External SRAM is aliased so that the same physical word
   can appear in P, X and Y (see [memory maps](02-memory-maps.md#dsp-external-memory-aliasing)).
 - DSP words in files (the upload stream and code packages) are stored as

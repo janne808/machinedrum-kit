@@ -20,7 +20,7 @@ still working (**Verified**; not yet flashed to hardware).
 | Family | NFX, a new eleventh family | Existing family: append to its menu (as GND-SW does). A new family means relocating the family table. |
 | Name | `NFX-GN` | 3-character family + 2-character suffix |
 | Knobs | GAIN (default 64) | Up to 8 labels of 4 characters |
-| DSP bank | `P:0x1FA000`, 4096 words | Inside the reserved code region `0x1F0000–0x1FFFFF` (see [reserving sample memory](12-packing-firmware.md#reserving-sample-memory)) |
+| DSP bank | `P:0x1BA000`, 4096 words | Inside the reserved code region `0x1B0000–0x1BFFFF` (see [reserving sample memory](12-packing-firmware.md#reserving-sample-memory)) |
 | Memory | Packet `+1`, no state, no pool | |
 
 ## 2. Design the packet and state
@@ -41,7 +41,7 @@ its reset value, and which stage (init/update/render) resets it.
 
 Assembled with an absolute-origin DSP56300 assembler (see
 [DSP programming](13-dsp-programming.md#toolchain)). `sdk.inc` defines
-`SDK_BANK equ $1FA000`.
+`SDK_BANK equ $1BA000`.
 
 ```asm
         include "sdk.inc"
@@ -168,11 +168,11 @@ In the image:
    - `Y:0x145C77 + 16` = `machine_render`
 
    Check first that each cell still holds the fallback value (equal to cell 0).
-4. DSP2 upload: insert a P section `0, 0x1FA000, n, code…` before the stream
+4. DSP2 upload: insert a P section `0, 0x1BA000, n, code…` before the stream
    terminator.
 5. Reserve the code region: lower the two startup sample budgets so sample
-   memory ends at `0x1F0000`, and install the loader guards with that ceiling.
-   RAM machines keep working with a little less recording memory.
+   memory ends at `0x1B0000`, and install the loader guards with that ceiling.
+   RAM machines keep working with less recording memory.
 
 [Packing firmware](12-packing-firmware.md) gives the full procedure and checks;
 `tools/examples/nfx-gn/build.py` performs all of it with `mdkit`.

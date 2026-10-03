@@ -50,11 +50,11 @@ dsp = img.DspStream(payloads['DSP2'])
 
 desc = mc.descriptor(main, handler_cpu, 8, 'GND', 'SW', labels, defaults)
 menu = mc.menu_list(mc.read_list(main, mc.GND_LIST) + [img.flash_cpu(0xFF000)])
-mc.reserve_sample_memory(main, 0x1F0000, guard_a_cpu, guard_b_cpu)  # code region
+mc.reserve_sample_memory(main, mc.CODE_REGION, guard_a_cpu, guard_b_cpu)  # 0x1B0000
 mc.register_id(main, 8, img.flash_cpu(0xFF000), dsp)      # free ID, empty entry, unused DSP type
 mc.set_family_list(main, 0, mc.GND_LIST, img.flash_cpu(0xFF100))
 mc.set_dispatch(dsp, 9, entries)                          # cells must hold the fallback
-mc.add_program(dsp, 0x1F3000, 0x1000, code)               # refuses overlaps
+mc.add_program(dsp, 0x1B3000, 0x1000, code)               # refuses overlaps
 image, records = img.pack_image(stock, {'MainOS': bytes(main), 'DSP2': dsp.bytes()},
                                 {0xFF000: bank})
 assert not img.low_window_pointers(image, {0xFF000: bank})
@@ -63,7 +63,7 @@ open('custom.syx', 'wb').write(sysex.encode_payload(sysex.image_payload(image)))
 
 Custom DSP code lives in stock sample memory, so every build reserves it first
 with `reserve_sample_memory`. This keeps all stock machines, and RAM machines
-keep recording with slightly less memory. `remove_ram_machines` is only for
+keep recording with less memory. `remove_ram_machines` is only for
 builds that give RAM recording memory to a large delay pool for delay-line
 machines.
 

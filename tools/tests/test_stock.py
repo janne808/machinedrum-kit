@@ -44,7 +44,8 @@ class Stock(unittest.TestCase):
         self.assertFalse(mc.dsp_type_free(s, 30))
         self.assertEqual([s.read(t) for t in mc.DISPATCH_TABLES], [0x10008E, 0x10008E, 0x10008F])
         self.assertEqual([s.read(t + 2) for t in mc.DISPATCH_TABLES], [0x1000A3, 0x1000A4, 0x1000AD])
-        self.assertFalse(s.overlaps(0x1F0000, 0x10000))
+        self.assertFalse(s.overlaps(mc.CODE_REGION, 0x10000))
+        self.assertFalse(s.overlaps(*mc.DELAY_POOL))
 
     def test_budget_sites(self):
         main = self.payloads['MainOS']
