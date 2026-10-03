@@ -60,6 +60,16 @@ unrolled or specialized assembly. It lets you:
 - **Masked integers**: after `and #mask,a`, take `a1` explicitly
   (`move a1,r0`). A full-accumulator move can saturate a negative intermediate
   even though the masked low word is in range. A ring-index bug came from this.
+- **A short immediate into a data ALU register is a fraction.** `move #16,a`
+  loads the 8-bit value into the most significant bits: `a1 = $100000`, not 16.
+  The same goes for `x0`, `x1`, `y0` and `y1`. Only address registers take a
+  short immediate as an integer (`move #16,r4`). Write integers into data ALU
+  registers in the long form, `move #>16,a`. The ALU-instruction forms behave
+  differently: `cmp #16,a`, `add #xx,a` and `sub #xx,a` use their 6-bit
+  immediate as an integer, as verified kernels rely on. When in doubt, use
+  `#>` everywhere. In one machine, `move #16,a` for "16 − k ticks" made a DO
+  loop count about a million, and the kernel runner timed out inside the
+  loop. If a kernel hangs in a DO loop, check how its count was loaded first.
 - **Shifts leave residue.** `asr` shifts bits into `A0`, and a following `asl`
   brings them back. If you need an integer, reload `A1` (or clear `A0`) before
   shifting left. `asr` of an odd value leaves a half-LSB in `A0`, which a later
