@@ -228,8 +228,10 @@ the Y alias.
 
 - **Silent-renderer padding**: the fallback renderer's `DO #50` at `P:0x100093`
   (word `0x063280`) can be reduced, for example to 25 iterations (`0x061980`).
-  Each idle track then costs less. The padding's purpose is unknown, so this is
-  off by default.
+  Each idle track's render is then shorter, but its slot in the pass is still
+  about one voice transfer (~3,000 cycles; see the
+  [voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)). So
+  the saving is only ~400 cycles per idle track, and the edit is off by default.
 
 ## Flash banks
 

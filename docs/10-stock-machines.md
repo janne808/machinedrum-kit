@@ -44,10 +44,30 @@ for 32 samples:
 ```
 
 **Fallback renderer** (`0x10008F`): writes 32 zeros inside a deliberately padded
-loop (`DO #50` of two NOPs per sample, at `P:0x100093`). It costs **3,438 cycles**:
-an idle track is not free. Every custom machine is cheaper when idle. The pad
-can be shortened (see [packing](12-packing-firmware.md#optional-dsp2-edits)),
-but its purpose is unknown.
+loop (`DO #50` of two NOPs per sample, at `P:0x100093`). It costs **3,438 cycles**.
+
+**What the padding is for.** It makes an idle track's render last about one
+voice transfer.
+- **The transfer:** each track's 32-word block takes about 2,900–3,000 DSP2
+  cycles to cross ESSI0 to DSP1. The dispatcher starts a block's transfer only
+  after the previous one has finished (see the
+  [voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
+- **The effect:** with the padding, an idle track takes the same share of the
+  pass as the transfer it needs anyway.
+- **Not needed for pacing:** the dispatcher's own DMA wait already enforces it.
+  In the emulator, a 700-cycle render simply waits about 2,400 cycles for the
+  link.
+
+**Consequences:**
+- **An idle track costs about one slot either way.** Custom machines that
+  render in less than ~3,000 cycles are not cheaper in practice: their slot is
+  the transfer time.
+- **Shortening the pad saves little:** only the ~400 cycles by which
+  3,438 + dispatch exceeds the transfer time (see
+  [packing](12-packing-firmware.md#optional-dsp2-edits)).
+
+The transfer time is an emulator measurement; it still needs confirming on
+hardware ([open questions](17-open-questions.md)).
 
 **E12 samples** are packed two 12-bit samples per word. The reader halves the
 position and extracts halves with 12-bit shifts. The sample sections run
