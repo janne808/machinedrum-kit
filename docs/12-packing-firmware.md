@@ -121,13 +121,17 @@ the slot. The guards also catch oversized banks already stored on the device.
 | --- | --- | --- | --- | --- |
 | **Code region** | `0x1F0000` | `0x120000` / `0x140000` | `0x0D0600` / `0x0E0000` | The kit's examples: custom DSP banks at `0x1F0000–0x1FFFFF`, all stock machines kept |
 | **Delay pool + code** | `0x1D0000` | `0x0E0000` / `0x100000` | `0x090600` / `0x0A0000` | Delay-line machines: 16 × `0x2000`-word per-track rings at `0x1D0000–0x1EFFFF`, then the code region. Usually combined with removing the RAM machines (below). |
+| **Delay pool + code in area 2** | `0x190000` | `0x060000` / `0x080000` | `0x010600` / `0x020000` | The same pool at `0x190000–0x1AFFFF` and code banks at `0x1B0000–0x1BFFFF`, below the slow area 3. About 8.9 s of ROM samples remain on 48-ROM; 32-ROM keeps very little. |
 
 Both reservations put custom memory in DSP2 bus area 3 (`0x1C0000+`), which
 costs about 5 wait states per access and per code-fetch miss on hardware,
 against about 1 below `0x1C0000`
 ([measured](02-memory-maps.md#measured-wait-states-hardware-dsp2)). Machines
 that are heavy in external accesses run faster from a lower `R`, at the cost of
-sample capacity (not yet tested on hardware, see [open questions](17-open-questions.md)).
+sample capacity. The area-2 layout was confirmed on hardware: a memory-heavy
+reverb fitted 5 instances instead of 2
+([memory maps](02-memory-maps.md#measured-wait-states-hardware-dsp2)). The
+kit's examples still use the area-3 code region.
 
 `mdkit.machine.sample_reservation(R)` computes the values, and
 `reserve_sample_memory()` applies them. With `R = 0x1F0000` the 48-ROM RAM
@@ -151,7 +155,7 @@ exchange**:
 
 Then reserve from the pool's base (`R = 0x1D0000`), as in the table above. With
 the RAM machines gone, their share of sample memory can go to the delays as
-well: set the budgets lower still, or reserve from a lower `R` (untested). Old kits and
+well: set the budgets lower still, or reserve from a lower `R` (`0x190000` has run on hardware, 48-ROM only). Old kits and
 SysEx assignments of RAM machines then produce silence instead of recording
 over the delay rings.
 

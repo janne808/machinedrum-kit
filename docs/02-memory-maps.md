@@ -123,6 +123,21 @@ Custom memory below `0x1C0000` (area 2) is three times faster per access.
 Moving it there means reserving more sample memory: see
 [packing firmware](12-packing-firmware.md#reserving-sample-memory).
 
+**Confirmed on hardware.** In a test kit, GND-SW was followed by a
+memory-heavy two-track reverb on as many tracks as fitted. The reverb makes
+about 600 delay-pool accesses per block, and its code is about 1K words. The
+same build was tested with two layouts:
+
+| Pool and code | Reverbs without underruns | Cost per reverb (estimate) |
+| --- | ---: | ---: |
+| Area 3: pool at `0x1D0000`, code at `0x1F0000+` | 2 | about 14k cycles |
+| Area 2: pool at `0x190000`, code at `0x1B0000+` | 5 | about 9.5–10.5k cycles |
+
+The emulator puts the reverb at about 6,750 cycles. Even in area 2, it costs
+about 3k cycles more on hardware. That is about 1 wait state on each of its
+external accesses and on each cold fetch of its code, since 16 voices share the
+1K cache.
+
 ## DSP2
 
 ### Internal memory
