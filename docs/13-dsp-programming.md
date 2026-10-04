@@ -269,12 +269,50 @@ compute sines or upload your own table.
   - Measured directly: about 5 wait states per access and per code-fetch miss
     in area 3, and about 1 in areas 0–2
     ([memory maps](02-memory-maps.md#measured-wait-states-hardware-dsp2)).
-    Estimate the hardware cost as emulated cycles + 5 × (area-3 data accesses
-    + cache-missing instruction fetches).
 
-  Count external data accesses per render (monitor `trace cpu`), keep hot
-  tables internal, leave margin, and test on hardware with the intended voice
-  count.
+  **Cost model** (validated on hardware, below):
+
+  ```text
+  hardware cycles ≈ emulated cycles + w × (external data accesses + executed code words)
+  ```
+
+  - **`w`:** the wait states of the memory involved: about 1 in area 2, where
+    the kit's code region and delay pool sit, and about 5 in area 3.
+  - **External data accesses:** count every X/Y access outside internal memory
+    per block, including both moves of a dual X/Y move.
+  - **Executed code words:** count each code word once per block, however
+    often it runs. Sixteen voices share the 1K-word instruction cache, so a
+    render starts cold and fetches each word it executes about once. Loops
+    pay only on their first pass.
+
+  Count both per render with a per-instruction trace (monitor `trace cpu`).
+  One trap: an emulator that runs a one-instruction `do` loop as a single step
+  reports that instruction's accesses once, not once per pass.
+
+  **Validation (2026-10-04).** A load-meter machine on a spare track burned a
+  set number of cycles per block, in steps of 512 (see below). The kit was a
+  generator followed by seven chained two-track reverbs, each pair with 580
+  external data accesses and about 1,020 executed code words per block, all
+  in area 2.
+  - **First underrun:** 30 steps on hardware, 53 in the emulator.
+  - **Gap:** about 11.8k cycles.
+  - **Fixed part:** about 1,200 of that is stock code and the generator's cold
+    fetches (the [calibration](02-memory-maps.md#measured-wait-states-hardware-dsp2)
+    found stock code losing about 1,000 cycles).
+  - **Per pair:** about 1,500 cycles, against about 1,600 predicted by the
+    model, within one 512-cycle step for the kit.
+
+  **Load meter.** To measure a kit's real headroom, put a machine on a spare
+  track that burns N cycles per block in a one-instruction `do` loop, then
+  outputs silence. The loop body is cache-resident and touches no memory, so
+  it costs one cycle per pass on hardware too. Raise N until underruns start:
+  N at the first underrun is the free budget. Comparing it with the
+  emulator's threshold for the same kit gives the hardware-only cost directly.
+  (A machine's packet updates on its track's trig, so trig the meter after
+  each change.)
+
+  Keep hot tables internal, leave margin, and test on hardware with the
+  intended voice count.
 - Measure a render's cost as the cycle count between the dispatcher's call
   (`P:0xB4`) and return (`P:0xB5`). Sum per track and compare the totals and
   the worst block with the budget.
