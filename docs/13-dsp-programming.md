@@ -291,16 +291,29 @@ compute sines or upload your own table.
 
   **Validation (2026-10-04).** A load-meter machine on a spare track burned a
   set number of cycles per block, in steps of 512 (see below). The kit was a
-  generator followed by seven chained two-track reverbs, each pair with 580
-  external data accesses and about 1,020 executed code words per block, all
-  in area 2.
+  generator followed by seven chained two-track reverbs, all in area 2. Each
+  pair made 550 external data accesses per block (342 reads, 208 writes) and
+  executed about 715 code words in a typical block.
   - **First underrun:** 30 steps on hardware, 53 in the emulator.
   - **Gap:** about 11.8k cycles.
   - **Fixed part:** about 1,200 of that is stock code and the generator's cold
     fetches (the [calibration](02-memory-maps.md#measured-wait-states-hardware-dsp2)
     found stock code losing about 1,000 cycles).
-  - **Per pair:** about 1,500 cycles, against about 1,600 predicted by the
-    model, within one 512-cycle step for the kit.
+  - **Per pair:** about 1,500 cycles.
+
+  With every access at one wait state, the model predicts 1,265 per pair,
+  about 16 % low. With one more wait state per **write**, it predicts 1,473,
+  within about 40. The calibration timed only reads, so the extra write cost
+  is a hypothesis; timing writes the same way would settle it. Until then,
+  count writes twice:
+
+  ```text
+  hardware cycles ≈ emulated + w × (external reads + 2 × external writes + code words per block)
+  ```
+
+  Count code words a typical block executes, not every word a long run ever
+  touches. Start-up and rarely taken paths inflate the latter: here 1,020
+  against 715.
 
   **Load meter.** To measure a kit's real headroom, put a machine on a spare
   track that burns N cycles per block in a one-instruction `do` loop, then
