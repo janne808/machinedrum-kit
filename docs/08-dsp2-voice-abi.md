@@ -217,5 +217,10 @@ puts real work into that track's render (see
   seven ~6,400-cycle voices were each followed by a 44-cycle one, and every
   short one still cost a full transfer slot.
 
+**On hardware (2026-10-05)** the floor is about **3,100** cycles. Fifteen
+plain oscillators, fifteen PWM oscillators and seven two-track reverbs (with a
+generator) left exactly the same load-meter headroom, because every slot sat
+on the floor. The 16 slots together can use about 68k cycles per block.
+
 The safe total on hardware is lower: the emulator charges no external-memory
-wait states. Leave generous headroom and measure worst cases, not averages.
+wait states and no pipeline interlocks. Leave generous headroom and measure worst cases, not averages.

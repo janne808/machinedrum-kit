@@ -144,6 +144,100 @@ then sent every setting to the slow reference loop, about 3.2× the cycles. The
 emulator passed everything; hardware overran and went silent. Add
 **cycle-ceiling tests** for the fast paths at every control setting.
 
+## Pipeline interlocks
+
+The DSP56300 pipeline stalls when an instruction needs a result that the
+previous one is still producing. **The emulator charges none of these
+interlocks**: its cycle table assumes no dependence on earlier instructions. On
+hardware they are real cycles, invisible to bit-exact tests and to the
+emulator's budget. In tight per-sample loops they added 10–25 % to the
+measured machines.
+
+### The rules
+
+From the DSP56300 Family Manual (Appendix A, pipeline interlocks):
+
+| Interlock | Cost | When |
+| --- | ---: | --- |
+| Arithmetic stall | +1 | The move part reads an accumulator (or a part of one) that the **previous** instruction's ALU part wrote |
+| Transfer stall | +1 | The move part reads an accumulator that the previous instruction's **move** part wrote |
+| AGU interlock | +3 / +2 / +1 | An address uses `Rn` within one / two / three instruction cycles of a move that wrote `Rn`, `Nn` or `Mn` |
+| `Tcc` then an R source | +1 | The instruction after a `Tcc` reads an address register |
+| `Jcc` not taken | +1 | A conditional jump falls through |
+| One-instruction `do` loop | +1 | Once per loop, not per pass |
+
+Typical offenders:
+
+```asm
+        move    x:(r0)+,a                     ; load
+        move    a,y:(r1)+                     ; +1 transfer stall: A was just loaded
+
+        add     x0,a
+        move    a,y:(r1)+                     ; +1 arithmetic stall
+
+        move    #table,r4
+        move    x:(r4),x0                     ; +3 AGU interlock
+```
+
+### Estimating them
+
+Apply the rules statically to the executed code, weighted by each instruction's
+execution count from a per-instruction profile of a typical and a worst block.
+The predecessor of a loop's first instruction is the `do` on entry and the
+loop's last instruction on every other pass. One script of about 150 lines does
+this. Rank the stalls by instruction and by label; they cluster in the inner
+loops.
+
+### Fixes that kept the arithmetic identical
+
+All of these were bit-exact with the unchanged models:
+
+- **Alternate the accumulators.** Copies and loads alternate `a` and `b`, so a
+  value is never stored right after it was loaded or computed.
+- **Interleave two independent chains.** Process two samples (or two taps,
+  two filter stages) at once, one in `a` and one in `b`. Each result then has
+  an instruction's distance before it is read.
+- **Fold adds into `mac`.** Load the addend into the accumulator first, then
+  `mac`, instead of `mpy` followed by an `add`: one instruction fewer, one
+  dependence fewer.
+- **Shifted adds as multiplies.** `mpy ±y1,#n,a` and `mac ±y1,#n,a` multiply
+  by 2^−n: a tap / 4 is `mac y1,#2,a`, with no separate shift.
+- **Fill gaps with independent loads.** Where a result must wait, put the next
+  sample's loads or an address update in the gap, using a free parallel move.
+- **Set address registers early.** Write `Rn`, `Nn` and `Mn` three instructions
+  before they are used, or use them through a different register.
+- **Unroll only to interleave.** `do` loops have no per-pass overhead, so
+  unrolling gains nothing by itself and costs instruction-cache space (1K
+  words shared by all 16 tracks).
+
+Check the scheduled code with the same differential tests and cycle ceilings
+as any optimization. Scheduling can cost a few emulated cycles (a filler)
+while saving more on hardware. Judge it by the estimate plus the emulated
+count, not by the emulated count alone.
+
+### Results
+
+Per instance and block, before → after scheduling:
+
+| Machine | Emulated cycles | Estimated interlocks | Hardware |
+| --- | --- | --- | --- |
+| Two-track reverb (per pair) | 4,857 → 4,469 | 1,137 → 380 | Generator + 7 pairs + load meter: first underrun 30 → **42** steps (512 cycles each): at least ~880 cycles freed per pair, against ~990–1,090 predicted. Both tracks of each pair now sit at the slot floor, so the gain is a lower bound. The emulator's threshold moved only 53 → 51. |
+| 4-pole ladder filter | unchanged | ~950 → ~500 | Generator + 14 instances with envelope cutoff and envelope VCA: ~700 above the slot floor per instance |
+| State-variable filter | +65 | ~755 → ~500 | Same kit: ~180 above the floor per instance |
+| Dual oscillator | unchanged | 385 → 161 (worst block) | 15 instances: at the floor, with the same headroom whether the oscillators are plain static saws or PWM with slide |
+
+**How accurate.** The estimate predicted the reverb's improvement within
+10–20 %. For machines that remain above the floor, the hidden cost left after
+scheduling (hardware minus emulated) matched the estimate within ~10 % in one
+kit and was ~1.5× lower than the estimate in another. Use the estimate to rank
+hot spots and to predict improvements. Measure the absolute cost with a load
+meter.
+
+**The slot floor caps the gain.** A machine already under ~3,100 cycles per
+track on hardware gains nothing from scheduling (see [budgeting](#budgeting)).
+Schedule the machines that are above the floor, and the hot loops of
+multi-track machines.
+
 ## Internal-memory tables
 
 **Why.** Hardware measurements showed that external data reads are the main
@@ -239,8 +333,8 @@ compute sines or upload your own table.
 
 - **73,728 cycles** per block for DSP2's whole producer pass: 16 renders plus
   dispatch, updates, interrupts and DMA waits.
-- **Every track costs at least ~3,000 cycles**: the time to send its 32-word
-  block to DSP1. DSP2 waits for the previous transfer before the next one. Budget
+- **Every track costs at least ~3,000 cycles** (~3,100 measured on hardware):
+  the time to send its 32-word block to DSP1. DSP2 waits for the previous transfer before the next one. Budget
   `sum(max(render + ~100, ~3,000))`, not the sum of renders (see the
   [voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
   - An **idle** track renders for 3,438 cycles (the fallback renderer's
@@ -310,6 +404,15 @@ compute sines or upload your own table.
   ```text
   hardware cycles ≈ emulated + w × (external reads + 2 × external writes + code words per block)
   ```
+
+  Add the **pipeline interlocks** the emulator does not charge either
+  ([above](#pipeline-interlocks)): up to 10–25 % in unscheduled inner loops.
+
+  **Hardware budget (2026-10-05).** Kits of 14–15 identical machines plus a load
+  meter put the usable total for the 16 track slots at **about 68k cycles per
+  block** on hardware, with every slot costing at least **~3,100**. Fifteen
+  plain oscillators, fifteen PWM oscillators with slide and seven two-track
+  reverbs all left exactly the same headroom: they all sit on the floor.
 
   Count code words a typical block executes, not every word a long run ever
   touches. Start-up and rarely taken paths inflate the latter: here 1,020
