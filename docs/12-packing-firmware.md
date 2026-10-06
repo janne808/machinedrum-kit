@@ -216,11 +216,18 @@ k = 0…16, below the RAM recorders' staging areas at `0x135206`.
 - eight custom delay, filter, reverb and oscillator machines pass their tests
   at the new addresses.
 
+**Confirmed on hardware** (2026-10-06): a full custom build in this layout
+works on the unit. It had the delay pool at `0x104000`, thirteen code banks
+from `0x124000`, stock sample budgets, and the RAM machines restored. That
+build renamed family slot 3 to RAM (the RAM list moved there) and used slot 9
+for its custom family. It did not shift the table.
+
 **The kit's examples use this layout.** `mdkit.machine.remove_e12_machines()`
 does all four edits; it removes the E12 family record in place, so P-I…RAM move
 up one slot. The OS identifies families by ID and rebuilds its family index map
 from the lists at boot. In the emulator, the browser lists and assigns P-I
-(now family 3), ROM (7) and RAM (8) normally. Not yet run on hardware.
+(now family 3), ROM (7) and RAM (8) normally. The memory layout is confirmed on
+hardware (above); the shifted family table has run only in the emulator.
 
 ## DSP2 edits
 

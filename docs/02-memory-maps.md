@@ -223,7 +223,8 @@ machines can use their sample data instead, with **no sample reservation**:
 sample memory, the ROM budget (29.7 s on 48-ROM) and the RAM machines all stay
 stock. The region is in bus area 0, which measured the same as area 2 (about 1
 wait state). The examples use banks `0x127000` (GND-SW) and `0x12E000`
-(NFX-GN). See [packing](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation).
+(NFX-GN). The layout works on hardware: a build with a full delay pool and
+thirteen code banks here ran with stock sample memory and RAM recording. See [packing](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation).
 
 | Region | Use |
 | --- | --- |
