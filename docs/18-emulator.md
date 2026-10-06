@@ -353,8 +353,8 @@ firmware or board model involved. It is fast (thousands of blocks per second)
 and supports both DSP engines.
 
 ```sh
-md-kernel --program code.bin --bank 0x1B3000 \
-          --init 0x1B3000 --update 0x1B3001 --render 0x1B300A \
+md-kernel --program code.bin --bank 0x127000 \
+          --init 0x127000 --update 0x127001 --render 0x12700A \
           --input in.bin --output out.bin --packet 4 \
           [--track 1] [--engine jit|interpreter] [--pool BASE:WORDS] \
           [--load Y:0x148000:table.bin] [--max-steps N]
@@ -415,7 +415,8 @@ Each `verify.py` runs:
    - NFX-GN: 512 random blocks on tracks 1, 15 and 0.
 2. **A booted run** through the monitor: registration read back,
    front-panel selection, live audio and state equal to the model. For GND-SW
-   it also checks the sample-budget reservation and a RAM-R1 recording.
+   it also checks stock sample budgets, the E12 removal, a RAM-R1 recording and
+   front-panel selection from the RAM family.
 
 `--kernel-only` skips the boot. A full run takes a few minutes.
 

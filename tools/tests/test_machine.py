@@ -76,6 +76,46 @@ class Machine(unittest.TestCase):
         for ref in mc.FAMILY_LIST_REFS:
             self.assertEqual(img.mainos_read(m, ref), (0x100FE004).to_bytes(4, 'big'))
 
+    def test_relocate_without_e12(self):
+        m = fake_mainos()
+        lists = [p for _, _, p in mc.read_families(m)]
+        rest = [p for i, p in enumerate(lists) if i != mc.E12_FAMILY_INDEX]
+        class Dsp:
+            def __init__(self):
+                self.cells = {}
+                self.removed = None
+            def read(self, a):
+                return self.cells.get(a, 0x10008F if a >= mc.DISPATCH_TABLES[2] else 0x10008E)
+            def write(self, a, v, expected=None):
+                self.cells[a] = v
+            sections = []
+            def remove_sections(self, targets):
+                self.removed = targets
+                return 0
+        d = Dsp()
+        d.sections = [img.Section('P', 0x103DBA + 4804 * i, 4804 if i < 41 else 201804 - 41 * 4804, 0)
+                      for i in range(42)]                     # 42 sections covering E12_DATA
+        for t in mc.DISPATCH_TABLES:
+            d.cells[t + 49] = 0x103700
+        mc.remove_e12_machines(m, d)
+        self.assertEqual([f[1] for f in mc.read_families(m)], ['GND', 'TRX', 'EFM', 'P-I', 'INP', 'MID', 'CTR', 'ROM', 'RAM'])
+        self.assertEqual([f[2] for f in mc.read_families(m)], rest)
+        self.assertEqual(len(d.removed), 42)
+        self.assertTrue(all(mc.dsp_type_free(d, i + 1) for i in mc.E12_IDS))
+        with self.assertRaises(img.ImageError):
+            mc.remove_e12_machines(m, d)                       # family 3 is no longer E12
+        table = mc.relocate_family_table(m, 0x100FE000, [('NFX', 0x100FE060)])
+        self.assertEqual(len(table), 8 * 11)
+        self.assertEqual(table[72:80], b'NFX\0' + (0x100FE060).to_bytes(4, 'big'))
+
+    def test_remove_sections(self):
+        s = img.DspStream(helpers.dsp_stream([('P', 0x10, [1, 2]), ('Y', 0x800, [3]), ('P', 0x20, [4, 5, 6])]))
+        self.assertEqual(s.remove_sections([('Y', 0x800, 1)]), 1)
+        self.assertEqual([(x.space, x.address, x.count) for x in s.sections], [('P', 0x10, 2), ('P', 0x20, 3)])
+        self.assertEqual(s.read(0x22, 'P'), 6)
+        with self.assertRaises(img.ImageError):
+            s.remove_sections([('P', 0x20, 2)])                # no such section
+
     def test_dispatch_and_program(self):
         _, payloads = helpers.fake_image()
         s = img.DspStream(payloads['DSP2'])

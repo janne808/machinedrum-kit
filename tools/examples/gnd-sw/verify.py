@@ -4,9 +4,10 @@
 1. Kernel: md-kernel runs the DSP code outside the firmware in both DSP engines,
    with poisoned registers and memory; every output sample, the state words and
    the oscillator scratch must equal model.py.
-2. Booted image: budgets and RAM-slot layout of the code-region reservation,
-   RAM-R1 still recording, registration read back, front-panel selection, and
-   live audio/state equal to the model at six knob settings.
+2. Booted image: the E12 layout (E12 gone from IDs, dispatch and families;
+   stock sample budgets and RAM slots), RAM-R1 still recording, registration
+   read back, front-panel selection (GND-SW, and RAM in its shifted family
+   slot), and live audio/state equal to the model at six knob settings.
 
   python3 verify.py --build out/ --firmware elektron_sps1-1uw_os1.63.bin [--kernel-only]
 """
@@ -119,15 +120,21 @@ def booted(build, stock_main):
 
         check('boot', cmd('boot')['reason'] == 'boot_ready'); go(330750)
         rom, total, base = u32(0x29E9F0), u32(0x29F6DE), u32(0x29F38E)
-        plan = build['reservation']['budgets']['48-ROM']
-        check(f'48-ROM budgets ROM 0x{rom:x} total 0x{total:x}', (rom, total, base) == (plan['rom'], plan['total'], plan['base']))
+        check(f'48-ROM budgets stock: ROM 0x{rom:x} total 0x{total:x}', (rom, total, base) == (0x140000, 0x15F400, 0x150000))
         slots = mem('dsp2', 'Y', 0x147E80, 16)[::4]
         end_rom = u32(0x26541E)
         stride = (total // 2 - end_rom) // 4
-        check(f'RAM slots end at 0x{slots[3] + stride:x}, below the code region',
-              slots == [base + end_rom + i * stride for i in range(4)] and slots[3] + stride <= build['reservation']['from'])
+        check(f'RAM slots stock, 0x{slots[0]:x}..0x{slots[3] + stride:x}',
+              slots == [base + end_rom + i * stride for i in range(4)] and slots[3] + stride <= 0x1FFA00)
+        names = [bytes(mem('coldfire', 'B', 0x252396 + 8 * i, 4)).rstrip(b'\0').decode() for i in range(10)]
+        check(f'families {names[:9]}', names == ['GND', 'TRX', 'EFM', 'P-I', 'INP', 'MID', 'CTR', 'ROM', 'RAM', '']
+              and u32(0x252396 + 76) == 0)
+        fallback = [mem('dsp2', 'Y', t)[0] for t in (0x145AF5, 0x145BB6, 0x145C77)]
+        check('E12 IDs 48-63 empty, DSP types 49-64 on the fallback',
+              all(u32(0x252092 + 4 * i) == 0x24EF54 for i in range(48, 64))
+              and all(mem('dsp2', 'Y', t + i + 1)[0] == f for i in range(48, 64) for t, f in zip((0x145AF5, 0x145BB6, 0x145C77), fallback)))
         check('RAM family and RAM IDs unchanged',
-              bytes(mem('coldfire', 'B', 0x252396 + 72, 4)) == b'RAM\0'
+              bytes(mem('coldfire', 'B', 0x252396 + 64, 4)) == b'RAM\0' and u32(0x252396 + 68) == smain(0x252396 + 76)
               and all(u32(0x252092 + 4 * i) == smain(0x252092 + 4 * i) for i in (160, 161, 162, 163, 165, 166, 167, 168)))
         assign(0, 32, 1)
         cmd('cpu dsp2'); bp = cmd('break 0x103579')['id']; cmd('midi 0x90 36 120'); r = cmd('continue 44100'); cmd(f'delete {bp}')
@@ -152,6 +159,18 @@ def booted(build, stock_main):
         check('front panel assigns ID 8', u32(0x7001AA) == 8)
         if u32(0x281A46) == 23:
             press(0x23, 0x10)
+        for _ in range(3):
+            press(0x23, 0x10)                 # back to the main screen
+        assign(0, 1)
+        press(0x22, 0x40); press(0x23, 0x20); press(0x24, 0x10); press(0x23, 0x40); press(0x24, 0x08)
+        for _ in range(8):
+            press(0x23, 0x40)
+        check(f'browser on RAM (family {u32(0x28B72C)}) with {u32(0x28C2D8)} entries', u32(0x28B72C) == 8 and u32(0x28C2D8) == 8)
+        press(0x23, 0x80); press(0x24, 0x08)
+        check(f'front panel assigns a RAM machine (ID {u32(0x7001AA)})', u32(0x7001AA) in (160, 161, 162, 163, 165, 166, 167, 168))
+        for _ in range(3):
+            press(0x23, 0x10)
+        assign(0, 8)
         for note, dec, ramp, rdec in [(0, 96, 0, 0), (60, 96, 0, 0), (69, 127, 0, 0), (127, 96, 0, 0), (69, 0, 0, 127), (69, 96, 127, 127)]:
             for cc, v in enumerate((note, dec, ramp, rdec), 16):
                 cmd(f'midi 0xb0 {cc} {v}')

@@ -156,7 +156,7 @@ This is the input of every neighbour (NFX) machine. Properties:
 | --- | --- |
 | Registers | All scratch, subject to the restore list above |
 | `Y:S+n…+0x3F` | Your private state |
-| Your P bank (e.g. `0x1B3000–0x1B3FFF`) | Code, and constant tables read through the Y alias |
+| Your P bank (e.g. `0x127000–0x127FFF`) | Code, and constant tables read through the Y alias |
 | `X:0x000–0x01F` | Scratch **within one call** (stock renderers use it; nothing survives between calls) |
 | The delay-pool slice `0x190000 + 0x2000·t` (or `0x104000 + 0x2000·t` in the [E12 layout](02-memory-maps.md#custom-machine-regions)) | Per-track ring memory, in builds that have a delay pool |
 | Sine table `X/Y:0x148000` | Read-only, 32,768 entries |

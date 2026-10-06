@@ -17,12 +17,12 @@
 | **HI08** | The DSP56303 host interface; the ColdFire's only path into DSP memory |
 | **ESSI** | Enhanced synchronous serial interface: ESSI0 links the DSPs, ESSI1 the codec |
 | **Neighbour tap** | Reading the previous track's raw voice block from the other output bank |
-| **NFX** | Neighbour-effect family, added by the NFX-GN example as an eleventh family |
+| **NFX** | Neighbour-effect family, added by the NFX-GN example after RAM |
 | **Packet** | Control words the handler produces, written to `Y:S+1…` |
 | **Pending word** | `Y:S`, set to the DSP type by a trig; makes the dispatcher call update (and init on a type change) |
 | **Delay pool** | Optional per-track ring memory for delay-line machines at DSP2 `0x190000–0x1AFFFF`, reserved from sample memory |
 | **Code region** | DSP2 `0x1B0000–0x1BFFFF` (bus area 2), reserved from sample memory for custom machine code |
-| **E12 region** | DSP2 `0x103DBA–0x135205` (bus area 0), E12's sample data; with E12 removed it holds a delay pool at `0x104000` and program banks from `0x124000`, with sample memory stock |
+| **E12 region** | DSP2 `0x103DBA–0x135205` (bus area 0), E12's sample data; with E12 removed it holds a delay pool at `0x104000` and program banks from `0x124000`, with sample memory stock. The examples' layout. |
 | **Producer pass** | DSP2's per-block loop over the 16 tracks |
 | **Q23** | Signed 24-bit fraction, `w / 2^23` |
 | **Raw word** | 16-bit knob value passed to a handler, about `value << 7`, slewed by the OS |

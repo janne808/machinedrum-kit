@@ -173,8 +173,9 @@ references** to it:
 | `0x23065A` | `0x252396` (table) | new table |
 | `0x22C210`, `0x231A60`, `0x231ABA`, `0x231B10`, `0x231F22`, `0x235368` | `0x25239A` (table + 4) | new table + 4 |
 
-The NFX-GN example adds NFX this way as an eleventh family; the name display
-and menu code then show it after RAM. Verify the eight sites against your image
+The NFX-GN example adds NFX this way after removing E12, as the tenth family
+(an eleventh with E12 kept); the name display and menu code then show it after
+RAM. Verify the eight sites against your image
 before patching: each must contain the original value
 (see [packing firmware](12-packing-firmware.md#guarded-edits)).
 

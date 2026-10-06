@@ -4,7 +4,8 @@
 1. Kernel: md-kernel runs the DSP code outside the firmware in both DSP
    engines with poisoned registers and memory; output must equal model.py for
    random neighbour input and gains, and be silent on track 0.
-2. Booted image: relocated family table, registration, RAM machines kept,
+2. Booted image: relocated family table without E12, stock sample budgets, E12 IDs and
+   dispatch removed, registration, RAM machines kept,
    front-panel selection, live audio equal to the model at six GAIN settings,
    and silence on track 0.
 
@@ -110,10 +111,15 @@ def booted(build):
         check('eight references point at the relocated family table',
               all(u32(a) == t for a in (0x22C1A8, 0x23065A))
               and all(u32(a) == t + 4 for a in (0x22C210, 0x231A60, 0x231ABA, 0x231B10, 0x231F22, 0x235368)))
-        names = [bytes(mem('coldfire', 'B', t + 8 * i, 4)).rstrip(b'\0').decode() for i in range(11)]
-        check(f'families {names}', names == ['GND', 'TRX', 'EFM', 'E12', 'P-I', 'INP', 'MID', 'CTR', 'ROM', 'RAM', 'NFX']
-              and u32(t + 88) == 0 and u32(t + 92) == 0)
-        check('NFX menu and ID 15', u32(t + 84) == m['menu_cpu'] and u32(m['menu_cpu']) == m['descriptor_cpu']
+        names = [bytes(mem('coldfire', 'B', t + 8 * i, 4)).rstrip(b'\0').decode() for i in range(10)]
+        check(f'families {names}', names == ['GND', 'TRX', 'EFM', 'P-I', 'INP', 'MID', 'CTR', 'ROM', 'RAM', 'NFX']
+              and u32(t + 80) == 0 and u32(t + 84) == 0)
+        check('sample budgets stock', (u32(0x29E9F0), u32(0x29F6DE)) == (0x140000, 0x15F400))
+        fallback = [mem('dsp2', 'Y', x)[0] for x in (0x145AF5, 0x145BB6, 0x145C77)]
+        check('E12 IDs 48-63 empty, DSP types 49-64 on the fallback',
+              all(u32(0x252092 + 4 * i) == 0x24EF54 for i in range(48, 64))
+              and all(mem('dsp2', 'Y', x + i + 1)[0] == f for i in range(48, 64) for x, f in zip((0x145AF5, 0x145BB6, 0x145C77), fallback)))
+        check('NFX menu and ID 15', u32(t + 76) == m['menu_cpu'] and u32(m['menu_cpu']) == m['descriptor_cpu']
               and u32(m['menu_cpu'] + 4) == 0 and u32(0x252092 + 60) == m['descriptor_cpu'])
         check('RAM machines still registered', all(u32(0x252092 + 4 * i) != 0x24EF54 for i in (160, 161, 162, 163, 165, 166, 167, 168)))
         check('dispatch type 16', [mem('dsp2', 'Y', x + 16)[0] for x in (0x145AF5, 0x145BB6, 0x145C77)]
@@ -122,7 +128,7 @@ def booted(build):
         press(0x22, 0x40); press(0x23, 0x20); press(0x24, 0x10); press(0x23, 0x40); press(0x24, 0x08)
         for _ in range(10):
             press(0x23, 0x40)
-        check('browser on NFX (family 10) with 1 entry', u32(0x28B72C) == 10 and u32(0x28C2D8) == 1)
+        check('browser on NFX (family 9) with 1 entry', u32(0x28B72C) == 9 and u32(0x28C2D8) == 1)
         press(0x23, 0x80); press(0x24, 0x08)
         check('front panel assigns ID 15', u32(0x7001AA) == 15)
         for _ in range(3):

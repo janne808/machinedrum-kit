@@ -17,10 +17,10 @@ still working (**Verified**; not yet flashed to hardware).
 | Decision | NFX-GN | Constraints |
 | --- | --- | --- |
 | Firmware ID | 15 | Use a free ID: 4–15, 30–31, 40–47, 73–79 or 86–94 (see [catalogue](07-machine-catalogue.md#free-ids)). DSP type = ID + 1 = 16, which must still be unused. |
-| Family | NFX, a new eleventh family | Existing family: append to its menu (as GND-SW does). A new family means relocating the family table. |
+| Family | NFX, a new family after RAM | Existing family: append to its menu (as GND-SW does). A new family means relocating the family table. |
 | Name | `NFX-GN` | 3-character family + 2-character suffix |
 | Knobs | GAIN (default 64) | Up to 8 labels of 4 characters |
-| DSP bank | `P:0x1BA000`, 4096 words | Inside the reserved code region `0x1B0000–0x1BFFFF` (see [reserving sample memory](12-packing-firmware.md#reserving-sample-memory)) |
+| DSP bank | `P:0x12E000`, 4096 words | Inside E12's former sample area, one of 17 banks at `0x124000 + 0x1000·k` (see [the E12 layout](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation)) |
 | Memory | Packet `+1`, no state, no pool | |
 
 ## 2. Design the packet and state
@@ -41,7 +41,7 @@ its reset value, and which stage (init/update/render) resets it.
 
 Assembled with an absolute-origin DSP56300 assembler (see
 [DSP programming](13-dsp-programming.md#toolchain)). `sdk.inc` defines
-`SDK_BANK equ $1BA000`.
+`SDK_BANK equ $12E000`.
 
 ```asm
         include "sdk.inc"
@@ -127,10 +127,11 @@ m68k-linux-gnu-nm control.elf       # symbol addresses, for the descriptor
 `0x100FF200` is file offset `0xFF200` seen through the CS0 alias: the example
 places its code 0x200 bytes into a flash bank at `0xFF000`. Pick the offset
 from your flash-bank layout (see [packing](12-packing-firmware.md#flash-banks)).
-The examples link the two sample-loader guards
-([`tools/examples/common/guards.s`](../tools/examples/common/guards.s)) into the
-same blob. The DSP bank lies in stock sample memory, which must be reserved
-before custom code can live there.
+The DSP bank lies in E12's sample data, which the build removes along with
+the E12 machines (step 6). A build that keeps E12 reserves the top of sample
+memory instead and links the two sample-loader guards
+([`tools/examples/common/guards.s`](../tools/examples/common/guards.s)) into this
+blob (see [reserving sample memory](12-packing-firmware.md#reserving-sample-memory)).
 
 ## 5. Descriptor
 
@@ -159,8 +160,8 @@ In the image:
 2. Menu: a stock image has no NFX family. The example copies the family table
    to its flash bank, appends `NFX` with a one-entry menu `[NFX-GN, 0]`, and
    repoints the eight references to the table
-   (see [adding a family](07-machine-catalogue.md#adding-a-family)). All ten
-   stock families stay. A machine for an existing family instead gets a longer
+   (see [adding a family](07-machine-catalogue.md#adding-a-family)). The nine
+   families left after step 5 stay. A machine for an existing family instead gets a longer
    copy of that family's menu (GND-SW: the four stock entries, then GND-SW).
 3. DSP2 dispatch: set type 16's cells to the entry symbols.
    - `Y:0x145AF5 + 16` = `machine_init`
@@ -168,11 +169,12 @@ In the image:
    - `Y:0x145C77 + 16` = `machine_render`
 
    Check first that each cell still holds the fallback value (equal to cell 0).
-4. DSP2 upload: insert a P section `0, 0x1BA000, n, code…` before the stream
+4. DSP2 upload: insert a P section `0, 0x12E000, n, code…` before the stream
    terminator.
-5. Reserve the code region: lower the two startup sample budgets so sample
-   memory ends at `0x1B0000`, and install the loader guards with that ceiling.
-   RAM machines keep working with less recording memory.
+5. Free the bank's memory, first of all: remove the E12 machines (IDs 48–63 to
+   the empty machine, DSP types 49–64 to the fallback, the E12 family record,
+   and E12's 42 sample sections from the upload). Sample memory and the RAM
+   machines stay stock.
 
 [Packing firmware](12-packing-firmware.md) gives the full procedure and checks;
 `tools/examples/nfx-gn/build.py` performs all of it with `mdkit`.

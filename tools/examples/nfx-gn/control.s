@@ -1,5 +1,5 @@
 | NFX-GN control handler. Linked at the CS0 alias address of its flash
-| location (0x100FF200), together with ../common/guards.s.
+| location (0x100FF200).
         .text
         .global gain_control
 

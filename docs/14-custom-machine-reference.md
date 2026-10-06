@@ -11,12 +11,13 @@ are higher.
 
 | Machine | ID / DSP type | Family | DSP bank | Kind | Cost |
 | --- | --- | --- | --- | --- | ---: |
-| GND-SW | 8 / 9 | GND (fifth entry) | `0x1B3000` | Generator | 734 default, 2,341 at note 127 with maximum ramp |
-| NFX-GN | 15 / 16 | NFX (new eleventh family) | `0x1BA000` | Neighbour effect | 154 |
+| GND-SW | 8 / 9 | GND (fifth entry) | `0x127000` | Generator | 734 default, 2,341 at note 127 with maximum ramp |
+| NFX-GN | 15 / 16 | NFX (new family after RAM) | `0x12E000` | Neighbour effect | 154 |
 
-Both use the code-region reservation from `0x1B0000`, in bus area 2 (see
-[packing](12-packing-firmware.md#reserving-sample-memory)). Neither needs
-sample memory beyond its code bank, and all stock machines stay.
+Both use the E12 layout: the E12 machines are removed and the banks sit in
+their former sample area, in bus area 0 (see
+[packing](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation)).
+Sample memory and every other stock machine stay.
 
 ## GND-SW: PolyBLEP saw
 
@@ -115,7 +116,8 @@ Start from the example whose shape is closest:
 - **A neighbour effect** reads `Y:0x140 ^ 0x20` and must output silence on
   track 0 (NFX-GN).
 - **An effect with memory** (a delay line) needs per-track storage outside the
-  64-word state block. Reserve it from sample memory like the code region, at
-  a lower address. If the space needed exceeds what the RAM machines can
-  spare, give them up (see
+  64-word state block. The E12 layout has a 16-track pool for it at
+  `0x104000 + 0x2000·t` (`mdkit.machine.E12_POOL`). With E12 kept, reserve it
+  from sample memory like the code region, at a lower address, and if the
+  space needed exceeds what the RAM machines can spare, give them up (see
   [removing the RAM machines](12-packing-firmware.md#removing-the-ram-machines-to-gain-delay-memory)).

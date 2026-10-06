@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Build a stock OS 1.63 image with GND-SW, a MIDI-tuned PolyBLEP saw, as a
-fifth GND machine. All stock machines, including RAM recording and playback,
-stay available.
+fifth GND machine, in the E12 layout: the 16 E12 machines make room for custom
+code, and sample memory, the ROM budget and RAM recording and playback stay
+stock.
 
 The build:
-  - reserves DSP2 memory from 0x1B0000 up for custom code: lowers the two
-    startup sample budgets and guards the ROM-sample loaders;
-    RAM machines keep working;
-  - uploads the DSP code at P:0x1B3000 and points DSP type 9 at it;
+  - removes the E12 machines (IDs, DSP dispatch, family record) and their 42
+    sample sections from the DSP2 upload;
+  - uploads the DSP code at P:0x127000, in E12's former sample area (bus
+    area 0), and points DSP type 9 at it;
   - registers firmware ID 8 and appends GND-SW to the GND menu;
   - writes machinedrum-gnd-sw.bin, .syx and build.json.
 
@@ -26,8 +27,7 @@ from mdkit import image as img, machine as mc, sysex, toolchain  # noqa: E402
 
 ID = 8
 DSP_TYPE = ID + 1
-CODE_REGION = mc.CODE_REGION             # 0x1B0000: reserved from here up
-DSP_BANK, DSP_CAPACITY = 0x1B3000, 0x1000
+DSP_BANK, DSP_CAPACITY = 0x127000, 0x1000   # inside mc.E12_CODE_REGION
 FLASH_BANK = 0xFF000                      # file offset of the 4 KiB flash bank
 DESC_OFF, MENU_OFF, CODE_OFF = 0x000, 0x100, 0x200
 
@@ -42,9 +42,9 @@ def build(firmware, asm, output, prefix='m68k-linux-gnu-', version=None):
 
     code, entries, _ = toolchain.assemble_dsp(asm, HERE / 'machine.s', DSP_BANK, DSP_CAPACITY, work / 'dsp')
     cf_code, cf = toolchain.link_coldfire(
-        [HERE / 'control.s', HERE.parent / 'common' / 'guards.s'],
+        [HERE / 'control.s'],
         img.flash_cpu(FLASH_BANK + CODE_OFF), 'saw_control', work / 'coldfire', prefix,
-        include_dirs=[HERE], defsyms={'GUARD_CEILING': CODE_REGION})
+        include_dirs=[HERE])
     if CODE_OFF + len(cf_code) > 0x1000:
         raise SystemExit('ColdFire code does not fit the flash bank')
 
@@ -62,14 +62,16 @@ def build(firmware, asm, output, prefix='m68k-linux-gnu-', version=None):
     assert name == 'GND' and gnd_list == mc.GND_LIST, families
     menu = mc.menu_list(mc.read_list(main, gnd_list) + [desc_cpu])
 
-    # MainOS: reserve the code region, register the ID, point GND at the new menu.
-    plan = mc.reserve_sample_memory(main, CODE_REGION, cf['guard_loader_a'], cf['guard_loader_b'])
+    # E12 out (MainOS and DSP2), then register the ID and point GND at the new menu.
+    removed = mc.remove_e12_machines(main, dsp)
     mc.register_id(main, ID, desc_cpu, dsp)
     mc.set_family_list(main, 0, gnd_list, menu_cpu)
 
     # DSP2: dispatch cells for type 9 and the program upload.
     mc.set_dispatch(dsp, DSP_TYPE, entries)
-    mc.add_program(dsp, DSP_BANK, DSP_CAPACITY, code)
+    if not mc.E12_CODE_REGION[0] <= DSP_BANK < sum(mc.E12_CODE_REGION):
+        raise SystemExit('bank outside the E12 code region')
+    mc.add_program(dsp, DSP_BANK, DSP_CAPACITY, code, reserved=[mc.E12_POOL])
 
     bank = bytearray(b'\xff' * 0x1000)
     bank[DESC_OFF:DESC_OFF + len(desc)] = desc
@@ -94,7 +96,8 @@ def build(firmware, asm, output, prefix='m68k-linux-gnu-', version=None):
     (out / 'machinedrum-gnd-sw.bin').write_bytes(image)
     (out / 'machinedrum-gnd-sw.syx').write_bytes(syx)
     manifest = {'sha256': img.sha256(image), 'version': report['version'], 'blobs': records,
-                'reservation': {'from': CODE_REGION, 'budgets': plan},
+                'layout': {'e12_words_removed': removed, 'code_region': mc.E12_CODE_REGION,
+                           'pool': mc.E12_POOL, 'sample_memory': 'stock'},
                 'machine': {'id': ID, 'dsp_type': DSP_TYPE, 'bank': DSP_BANK, 'words': len(code),
                             'entries': dict(zip(mc.ENTRY_SYMBOLS, entries)),
                             'descriptor_cpu': desc_cpu, 'menu_cpu': menu_cpu,

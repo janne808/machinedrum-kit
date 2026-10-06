@@ -175,6 +175,21 @@ class DspStream:
         if (self.entry, self.config) != (entry, config):
             raise ImageError('entry/config changed')
 
+    def remove_sections(self, targets):
+        """Drop the sections listed as (space, address, count), each of which must
+        be uploaded exactly once. Returns the number of words removed."""
+        targets = set(targets)
+        hits = [s for s in self.sections if (s.space, s.address, s.count) in targets]
+        if len(hits) != len(targets):
+            raise ImageError('a section to remove is not uploaded exactly once')
+        entry, config = self.entry, self.config
+        for s in sorted(hits, key=lambda s: -s.byte_offset):
+            del self.data[s.byte_offset - 9:s.byte_offset + 3 * s.count]
+        self._parse()
+        if (self.entry, self.config) != (entry, config):
+            raise ImageError('entry/config changed')
+        return sum(s.count for s in hits)
+
     def bytes(self):
         return bytes(self.data)
 

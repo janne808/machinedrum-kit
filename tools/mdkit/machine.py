@@ -31,6 +31,8 @@ FAMILY_TABLE_REFS = (0x22C1A8, 0x23065A)
 FAMILY_LIST_REFS = (0x22C210, 0x231A60, 0x231ABA, 0x231B10, 0x231F22, 0x235368)
 RAM_FAMILY_INDEX = 9
 RAM_IDS = (160, 161, 162, 163, 165, 166, 167, 168)
+E12_FAMILY_INDEX = 3
+E12_IDS = tuple(range(48, 64))
 
 # ---- DSP2 --------------------------------------------------------------------------
 DISPATCH_TABLES = (0x145AF5, 0x145BB6, 0x145C77)    # init, update, render; 193 entries
@@ -53,7 +55,16 @@ SAMPLE_BASE_GLOBAL = 0x29F38E       # read by the guards
 # Both sit in DSP2 bus area 2 (below 0x1C0000, about 1 wait state). Area 3
 # (0x1C0000 up) costs about 5 per access and per code-fetch miss on hardware.
 DELAY_POOL = (0x190000, 0x20000)    # optional per-track delay rings (16 x 0x2000 words)
-CODE_REGION = 0x1B0000              # reserved for custom DSP banks (16 x 0x1000 words) by the examples
+CODE_REGION = 0x1B0000              # reserved for custom DSP banks (16 x 0x1000 words)
+
+# ---- The E12 layout (the examples) ---------------------------------------------------
+# E12's sample data sits below all sample memory, in bus area 0 (about 1 wait state,
+# as area 2). With the 16 E12 machines removed it holds a delay pool and 17 program
+# banks, and sample memory, budgets and the RAM machines stay stock.
+E12_DATA = (0x103DBA, 201804)       # 42 P sections: 21 samples, each with a 0x99-word tail
+E12_SECTIONS = 42
+E12_POOL = (0x104000, 0x20000)      # 16 x 0x2000-word per-track rings, 8K-aligned
+E12_CODE_REGION = (0x124000, 0x11000)   # 17 banks of 0x1000; RAM staging starts at 0x135206
 
 
 def sample_reservation(reserve_from):
@@ -100,6 +111,36 @@ def remove_ram_machines(mainos, dsp):
     for ident in RAM_IDS:
         unregister_id(mainos, ident)
         clear_dispatch(dsp, ident + 1)
+
+
+def e12_sections(dsp):
+    """E12's stock sample sections: P sections wholly inside E12_DATA."""
+    start, count = E12_DATA
+    hits = [s for s in dsp.sections if s.space == 'P' and start <= s.address
+            and s.address + s.count <= start + count]
+    if len(hits) != E12_SECTIONS or sum(s.count for s in hits) != count:
+        raise ImageError('E12 sample sections not found: already removed, or custom sections inside?')
+    return [(s.space, s.address, s.count) for s in hits]
+
+
+def remove_e12_machines(mainos, dsp):
+    """Free E12's sample data for custom code and delay pools (docs/12-packing-
+    firmware.md): IDs 48-63 to the empty descriptor, DSP types 49-64 to the
+    fallback, the 42 sample sections out of the upload, and the E12 record out of
+    the family table in place (later families move up one; the OS identifies
+    families by ID, and rebuilds its inverse map from the lists at boot). Call it
+    before adding programs to the region. Returns the number of words removed."""
+    families = read_families(mainos)
+    if families[E12_FAMILY_INDEX][1] != 'E12':
+        raise ImageError('family 3 is not E12')
+    for ident in E12_IDS:
+        unregister_id(mainos, ident)
+        clear_dispatch(dsp, ident + 1)
+    rest = b''.join(name.encode().ljust(4, b'\0') + u32(p)
+                    for i, name, p in families if i != E12_FAMILY_INDEX)
+    old = mainos_read(mainos, FAMILY_TABLE, 8 * len(families) + 8)
+    mainos_replace(mainos, FAMILY_TABLE, old, rest + bytes(16))
+    return dsp.remove_sections(e12_sections(dsp))
 
 
 LABEL_RE = re.compile('[A-Z0-9 -]{0,4}')
@@ -189,12 +230,10 @@ def set_family_list(mainos, index, old_pointer, new_pointer):
 
 
 def relocate_family_table(mainos, new_table_cpu, extra):
-    """Copy the stock family table plus `extra` [(name, list_pointer)] and a zero
+    """Copy the family table plus `extra` [(name, list_pointer)] and a zero
     record; repoint the eight references. Returns the new table's bytes."""
-    stock = mainos_read(mainos, FAMILY_TABLE, 8 * STOCK_FAMILIES)
-    if mainos_read(mainos, FAMILY_TABLE + 8 * STOCK_FAMILIES, 8) != bytes(8):
-        raise ImageError('unexpected family table terminator')
-    table = bytearray(stock)
+    count = len(read_families(mainos))          # STOCK_FAMILIES, or one less without E12
+    table = bytearray(mainos_read(mainos, FAMILY_TABLE, 8 * count))
     for name, pointer in extra:
         table += name.encode().ljust(4, b'\0') + u32(pointer)
     table += bytes(8)

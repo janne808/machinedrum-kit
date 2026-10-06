@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Build a stock OS 1.63 image with NFX-GN, the kit's worked example
-(docs/11-writing-a-custom-machine.md), in a new NFX family. All stock machines,
-including RAM recording and playback, stay available.
+(docs/11-writing-a-custom-machine.md), in a new NFX family, in the E12 layout:
+the 16 E12 machines make room for custom code, and sample memory, the ROM
+budget and RAM recording and playback stay stock.
 
 The build:
-  - reserves DSP2 memory from 0x1B0000 up for custom code (sample budgets +
-    loader guards; RAM machines keep working with slightly less memory);
-  - relocates the family table to flash and appends an eleventh family, NFX;
-  - adds NFX-GN as firmware ID 15 / DSP type 16, code at P:0x1BA000;
+  - removes the E12 machines (IDs, DSP dispatch, family record) and their 42
+    sample sections from the DSP2 upload;
+  - relocates the family table to flash and appends NFX as the tenth family;
+  - adds NFX-GN as firmware ID 15 / DSP type 16, code at P:0x12E000, in
+    E12's former sample area (bus area 0);
   - writes machinedrum-nfx-gn.bin, .syx and build.json.
 
   python3 build.py --firmware elektron_sps1-1uw_os1.63.bin \
@@ -25,8 +27,7 @@ from mdkit import image as img, machine as mc, sysex, toolchain  # noqa: E402
 
 ID = 15
 DSP_TYPE = ID + 1
-CODE_REGION = mc.CODE_REGION             # 0x1B0000: reserved from here up
-DSP_BANK, DSP_CAPACITY = 0x1BA000, 0x1000
+DSP_BANK, DSP_CAPACITY = 0x12E000, 0x1000   # inside mc.E12_CODE_REGION
 FLASH_BANK = 0xFF000
 TABLE_OFF, MENU_OFF, DESC_OFF, CODE_OFF = 0x000, 0x060, 0x080, 0x200
 
@@ -41,9 +42,8 @@ def build(firmware, asm, output, prefix='m68k-linux-gnu-', version=None):
 
     code, entries, _ = toolchain.assemble_dsp(asm, HERE / 'machine.s', DSP_BANK, DSP_CAPACITY, work / 'dsp')
     cf_code, cf = toolchain.link_coldfire(
-        [HERE / 'control.s', HERE.parent / 'common' / 'guards.s'],
-        img.flash_cpu(FLASH_BANK + CODE_OFF), 'gain_control', work / 'coldfire', prefix,
-        defsyms={'GUARD_CEILING': CODE_REGION})
+        [HERE / 'control.s'],
+        img.flash_cpu(FLASH_BANK + CODE_OFF), 'gain_control', work / 'coldfire', prefix)
     if CODE_OFF + len(cf_code) > 0x1000:
         raise SystemExit('ColdFire code does not fit the flash bank')
 
@@ -57,13 +57,15 @@ def build(firmware, asm, output, prefix='m68k-linux-gnu-', version=None):
     desc = mc.descriptor(main, cf['gain_control'], ID, 'NFX', 'GN',
                          ['GAIN', '', '', '', '', '', '', ''], [64, 0, 0, 0, 0, 0, 0, 0])
 
-    # MainOS: code region, family table with NFX appended, ID 15.
-    plan = mc.reserve_sample_memory(main, CODE_REGION, cf['guard_loader_a'], cf['guard_loader_b'])
+    # E12 out (MainOS and DSP2), family table with NFX appended, ID 15.
+    removed = mc.remove_e12_machines(main, dsp)
     table = mc.relocate_family_table(main, table_cpu, [('NFX', menu_cpu)])
     mc.register_id(main, ID, desc_cpu, dsp)
 
     mc.set_dispatch(dsp, DSP_TYPE, entries)
-    mc.add_program(dsp, DSP_BANK, DSP_CAPACITY, code)
+    if not mc.E12_CODE_REGION[0] <= DSP_BANK < sum(mc.E12_CODE_REGION):
+        raise SystemExit('bank outside the E12 code region')
+    mc.add_program(dsp, DSP_BANK, DSP_CAPACITY, code, reserved=[mc.E12_POOL])
 
     bank = bytearray(b'\xff' * 0x1000)
     bank[TABLE_OFF:TABLE_OFF + len(table)] = table
@@ -92,10 +94,11 @@ def build(firmware, asm, output, prefix='m68k-linux-gnu-', version=None):
     (out / 'machinedrum-nfx-gn.bin').write_bytes(image)
     (out / 'machinedrum-nfx-gn.syx').write_bytes(syx)
     manifest = {'sha256': img.sha256(image), 'version': report['version'], 'blobs': records,
-                'reservation': {'from': CODE_REGION, 'budgets': plan},
+                'layout': {'e12_words_removed': removed, 'code_region': mc.E12_CODE_REGION,
+                           'pool': mc.E12_POOL, 'sample_memory': 'stock'},
                 'machine': {'id': ID, 'dsp_type': DSP_TYPE, 'bank': DSP_BANK, 'words': len(code),
                             'entries': dict(zip(mc.ENTRY_SYMBOLS, entries)),
-                            'family_table_cpu': table_cpu, 'family_index': 10,
+                            'family_table_cpu': table_cpu, 'family_index': len(table) // 8 - 2,
                             'descriptor_cpu': desc_cpu, 'menu_cpu': menu_cpu,
                             'handler_cpu': cf['gain_control']}}
     (out / 'build.json').write_text(json.dumps(manifest, indent=2) + '\n')

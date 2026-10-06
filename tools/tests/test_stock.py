@@ -46,6 +46,11 @@ class Stock(unittest.TestCase):
         self.assertEqual([s.read(t + 2) for t in mc.DISPATCH_TABLES], [0x1000A3, 0x1000A4, 0x1000AD])
         self.assertFalse(s.overlaps(mc.CODE_REGION, 0x10000))
         self.assertFalse(s.overlaps(*mc.DELAY_POOL))
+        # The E12 layout: only E12's 42 sample sections touch its pool and code region.
+        e12 = mc.e12_sections(s)
+        for region in (mc.E12_POOL, mc.E12_CODE_REGION):
+            self.assertTrue(all(('P', x.address, x.count) in e12 for x in s.overlaps(*region)))
+        self.assertLessEqual(sum(mc.E12_CODE_REGION), 0x135206)          # RAM staging areas
 
     def test_budget_sites(self):
         main = self.payloads['MainOS']

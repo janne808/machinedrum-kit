@@ -19,7 +19,7 @@ This is binary relocation and patching, not recompiling the OS.
 4. assemble every custom DSP program at its bank address
    assemble and link every ColdFire handler blob at its CPU alias address
 5. MainOS edits (guarded, length-preserving): ID table, family table/menus,
-   sample budgets and loader guards (reserving memory for custom code);
+   and, for builds that reserve sample memory, budgets and loader guards;
    RAM-machine removal only in builds that trade it for a delay pool
 6. DSP2 edits: dispatch cells (in place), extra P sections before the terminator
 7. build the flash banks: descriptors, menus, family table, handler blobs, tables
@@ -119,7 +119,7 @@ the slot. The guards also catch oversized banks already stored on the device.
 
 | Reservation | `R` | 48-ROM ROM / total | 32-ROM ROM / total | Used by |
 | --- | --- | --- | --- | --- |
-| **Code region** | `0x1B0000` (`mdkit.machine.CODE_REGION`) | `0x0A0000` / `0x0C0000` | `0x050600` / `0x060000` | The kit's examples: custom DSP banks at `0x1B0000–0x1BFFFF`, all stock machines kept |
+| **Code region** | `0x1B0000` (`mdkit.machine.CODE_REGION`) | `0x0A0000` / `0x0C0000` | `0x050600` / `0x060000` | Custom DSP banks at `0x1B0000–0x1BFFFF`, all stock machines kept (the examples' earlier layout) |
 | **Delay pool + code** | `0x190000` (`DELAY_POOL`) | `0x060000` / `0x080000` | `0x010600` / `0x020000` | Delay-line machines: 16 × `0x2000`-word per-track rings at `0x190000–0x1AFFFF`, then the code region. Usually combined with removing the RAM machines (below). About 8.9 s of ROM samples remain on 48-ROM; 32-ROM keeps very little. |
 
 Both keep custom memory below `0x1C0000`, in DSP2 bus area 2. Area 3 above it
@@ -216,7 +216,11 @@ k = 0…16, below the RAM recorders' staging areas at `0x135206`.
 - eight custom delay, filter, reverb and oscillator machines pass their tests
   at the new addresses.
 
-Not yet run on hardware. `mdkit` has no helper for these edits yet.
+**The kit's examples use this layout.** `mdkit.machine.remove_e12_machines()`
+does all four edits; it removes the E12 family record in place, so P-I…RAM move
+up one slot. The OS identifies families by ID and rebuilds its family index map
+from the lists at boot. In the emulator, the browser lists and assigns P-I
+(now family 3), ROM (7) and RAM (8) normally. Not yet run on hardware.
 
 ## DSP2 edits
 
@@ -276,17 +280,15 @@ the gap afterwards: a booted image keeps the table intact under full load.
 
 ### DSP program banks
 
-Give each machine its own `0x1000`-word bank inside the reserved code region
-`0x1B0000–0x1BFFFF` (the P view of external SRAM). That leaves room for 16
-banks. The examples use:
+Give each machine its own `0x1000`-word bank. In the
+[E12 layout](#removing-e12-instead-memory-without-a-reservation) there is room
+for 17 at `0x124000 + 0x1000·k` (`mdkit.machine.E12_CODE_REGION`); with a
+reservation, 16 in the code region `0x1B0000–0x1BFFFF`. The examples use:
 
 | Bank | Machine (ID) |
 | --- | --- |
-| `0x1B3000` | GND-SW (8) |
-| `0x1BA000` | NFX-GN (15) |
-
-Without a reservation, the [E12 region](#removing-e12-instead-memory-without-a-reservation)
-has room for 17 banks at `0x124000 + 0x1000·k`.
+| `0x127000` | GND-SW (8) |
+| `0x12E000` | NFX-GN (15) |
 
 Code banks in `0x1B0000–0x1BAFFF` have run on hardware. So have banks in
 `0x1F0000–0x1F9FFF`, in earlier builds (area 3, about five times the wait states
@@ -315,7 +317,7 @@ a descriptor is 86 bytes, a menu entry 4 bytes, and a simple handler well under
 | --- | --- |
 | `0xFF000` | GND-SW descriptor |
 | `0xFF100` | GND menu: the 4 stock entries, GND-SW, 0 |
-| `0xFF200` | ColdFire code: `saw_control` + pitch table + the two loader guards, linked at `0x100FF200` |
+| `0xFF200` | ColdFire code: `saw_control` + pitch table, linked at `0x100FF200` |
 
 **NFX-GN example**, bank `0xFF000–0xFFFFF`:
 
@@ -324,7 +326,7 @@ a descriptor is 86 bytes, a menu entry 4 bytes, and a simple handler well under
 | `0xFF000` | Relocated family table: the 10 stock families, NFX, terminator (96 bytes) |
 | `0xFF060` | NFX menu: NFX-GN, 0 |
 | `0xFF080` | NFX-GN descriptor |
-| `0xFF200` | ColdFire code: `gain_control` + the two loader guards, linked at `0x100FF200` |
+| `0xFF200` | ColdFire code: `gain_control`, linked at `0x100FF200` |
 
 Several machines can share one ColdFire code blob, linked once. Blobs linked
 separately can call each other's helpers through `--defsym name=address` at

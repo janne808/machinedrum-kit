@@ -115,15 +115,15 @@ What the measurements show:
 - **Area 3 is the slowest memory DSP2 has.** Every external data access and
   every cache miss there costs about 6 cycles, three times the cost in areas
   0–2. Earlier builds kept the code region (`0x1F0000+`) and the delay pool
-  (`0x1D0000`) there. The kit now reserves both in area 2
+  (`0x1D0000`) there. The kit now keeps both in area 0 or 2
   ([custom-machine regions](#custom-machine-regions)).
 - **Stock code loses little.** The emulator's first underrun was at 75, against
   71 on hardware. So the stock kit loses only about 1,000 cycles per block to wait
   states and cache misses.
 
-Custom memory below `0x1C0000` (area 2) is three times faster per access.
-Moving it there means reserving more sample memory: see
-[packing firmware](12-packing-firmware.md#reserving-sample-memory).
+Custom memory below `0x1C0000` (areas 0–2) is three times faster per access.
+Use E12's former sample area (area 0), or reserve sample memory below
+`0x1C0000`: see [packing firmware](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation).
 
 **Confirmed on hardware.** In a test kit, GND-SW was followed by a
 memory-heavy two-track reverb on as many tracks as fitted. The reverb makes
@@ -215,14 +215,15 @@ contiguous range, so area 3 (`0x1C0000–0x1FFFFF`) above them stays unused:
 | `0x190000–0x1AFFFF` | **Delay pool** (optional): reserve from `0x190000`. Delay-line machines need this much; builds that use it usually give up the RAM machines to free the space. | 16 × `0x2000`-word per-track delay rings (`0x190000 + 0x2000·t`) |
 
 Code banks in `0x1B0000–0x1BAFFF` and the pool at `0x190000` have run on
-hardware. The kit's examples use `0x1B3000` (GND-SW) and `0x1BA000` (NFX-GN).
-Earlier builds used `0x1F0000+` for code and `0x1D0000` for the pool, in area 3.
+hardware. Earlier builds used `0x1F0000+` for code and `0x1D0000` for the pool,
+in area 3.
 
-**Alternative: the E12 region.** A build that removes the 16 E12 machines can
-use their sample data instead, with **no sample reservation**: sample memory,
-the ROM budget (29.7 s on 48-ROM) and the RAM machines all stay stock. The
-region is in bus area 0, which measured the same as area 2 (about 1 wait
-state). See [packing](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation).
+**The E12 region (the kit's examples).** A build that removes the 16 E12
+machines can use their sample data instead, with **no sample reservation**:
+sample memory, the ROM budget (29.7 s on 48-ROM) and the RAM machines all stay
+stock. The region is in bus area 0, which measured the same as area 2 (about 1
+wait state). The examples use banks `0x127000` (GND-SW) and `0x12E000`
+(NFX-GN). See [packing](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation).
 
 | Region | Use |
 | --- | --- |
