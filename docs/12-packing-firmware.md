@@ -173,6 +173,51 @@ Removing the RAM machines is only needed for this trade. A machine that needs
 a code bank, or a small buffer that fits in the reserved region, should keep
 them. `mdkit.machine.remove_ram_machines()` performs the ID and dispatch edits.
 
+### Removing E12 instead: memory without a reservation
+
+E12's sample data, `0x103DBA–0x135205` (201,804 words), is uploaded at boot
+as 42 P sections: 21 samples, each followed by a `0x99`-word tail (see
+[stock machines](10-stock-machines.md#algorithms-worth-knowing)). It sits
+below all sample memory, so a build that gives up the 16 E12 machines can
+put the delay pool and every code bank there and leave sample memory stock:
+
+| Edit | Old | New |
+| --- | --- | --- |
+| ID table `0x252092 + 4·ID`, ID 48–63 | E12-BD…E12-BC | `0x24EF54` (empty machine) |
+| DSP2 dispatch cells for types 49–64 | E12 entries | the fallback (entry 0) |
+| DSP2 upload stream | E12's 42 sample sections | removed; match each by its exact (address, count) |
+| Family 3 name / list (`0x252396 + 3·8`, `0x25239A + 3·8`) | `E12\0` / E12 list | another family, or a custom family |
+| Sample budgets, loader guards | — | **none**: stock |
+
+The DSP layout ([memory maps](02-memory-maps.md#custom-machine-regions)): the
+pool at `0x104000–0x123FFF` and program banks at `0x124000 + 0x1000·k`,
+k = 0…16, below the RAM recorders' staging areas at `0x135206`.
+
+- **Match sections exactly.** The custom banks lie inside E12's range. A
+  filter on "P sections inside `0x103DBA–0x135205`" also drops the custom
+  programs appended to the stream. Remove only the 42 stock sections, by
+  address and count, and assert the count and the word total.
+- **Family slot.** The freed slot 3 can take any family. One build moved the
+  RAM list (`0x25206E`) to slot 3 and used slot 9 for its custom family.
+  This kept both RAM recording and the custom family in a stock-size table.
+- **What stays.** E12's descriptors and coefficient tables
+  (`0x103C7B–0x103DB9`) and its renderers stay uploaded and unused.
+- **Who else reads the region.** Captured init/update/render traces show only
+  the E12 renderers reading it. Number scans flag immediates in TRX-B2 and the
+  ROM/RAM players that look like addresses there; the traces show they are not
+  pointers. The traces cover default paths, not every parameter.
+- **Old kits.** Kits or SysEx that assign E12 machines get silence.
+
+**Verified** in the emulator (2026-10-05):
+- the build boots with stock budgets;
+- E12 assignments render silence;
+- the RAM IDs and their dispatch match stock;
+- RAM-R1 records into its stock slot;
+- eight custom delay, filter, reverb and oscillator machines pass their tests
+  at the new addresses.
+
+Not yet run on hardware. `mdkit` has no helper for these edits yet.
+
 ## DSP2 edits
 
 ### Dispatch cells
@@ -239,6 +284,9 @@ banks. The examples use:
 | --- | --- |
 | `0x1B3000` | GND-SW (8) |
 | `0x1BA000` | NFX-GN (15) |
+
+Without a reservation, the [E12 region](#removing-e12-instead-memory-without-a-reservation)
+has room for 17 banks at `0x124000 + 0x1000·k`.
 
 Code banks in `0x1B0000–0x1BAFFF` have run on hardware. So have banks in
 `0x1F0000–0x1F9FFF`, in earlier builds (area 3, about five times the wait states

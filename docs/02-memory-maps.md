@@ -218,6 +218,19 @@ Code banks in `0x1B0000–0x1BAFFF` and the pool at `0x190000` have run on
 hardware. The kit's examples use `0x1B3000` (GND-SW) and `0x1BA000` (NFX-GN).
 Earlier builds used `0x1F0000+` for code and `0x1D0000` for the pool, in area 3.
 
+**Alternative: the E12 region.** A build that removes the 16 E12 machines can
+use their sample data instead, with **no sample reservation**: sample memory,
+the ROM budget (29.7 s on 48-ROM) and the RAM machines all stay stock. The
+region is in bus area 0, which measured the same as area 2 (about 1 wait
+state). See [packing](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation).
+
+| Region | Use |
+| --- | --- |
+| `0x103DBA–0x103FFF` | Unused (E12's first section, below the 8K boundary) |
+| `0x104000–0x123FFF` | Delay pool: 16 × `0x2000`-word rings (`0x104000 + 0x2000·t`), 8K-aligned |
+| `0x124000–0x134FFF` | Up to 17 program banks, `0x124000 + 0x1000·k` |
+| `0x135000–0x135205` | Unused; the RAM recorders' staging areas start at `0x135206` |
+
 The emulator also treats `P:0x400–0x4FF` as unused (filled with RTS words). Early
 prototypes placed code there. On hardware it is **not internal memory**:
 - DSP2 runs with the memory switch and the cache on, so internal P ends at

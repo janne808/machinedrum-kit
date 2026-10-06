@@ -66,13 +66,15 @@ voice transfer.
   3,438 + dispatch exceeds the transfer time (see
   [packing](12-packing-firmware.md#optional-dsp2-edits)).
 
-The transfer time is an emulator measurement; it still needs confirming on
-hardware ([open questions](17-open-questions.md)).
+The transfer time was measured in the emulator. Hardware load-meter kits
+confirm a floor of about 3,100 cycles per track
+([voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
 
 **E12 samples** are packed two 12-bit samples per word. The reader halves the
 position and extracts halves with 12-bit shifts. The sample sections run
 `0x103DBA–0x135205` in 21 abutting pairs (sample + a `0x99`-word tail).
-Reclaiming them for other uses means disabling all 16 E12 dispatch triples first.
+Reclaiming them for other uses means disabling all 16 E12 dispatch triples first
+(see [packing](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation)).
 
 **Sample players** (ROM/RAM) read four-word records at `0x147E00 + 4·slot`:
 sample base, length, and two control words that the recorder updates as it
