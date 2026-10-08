@@ -392,7 +392,8 @@ range are filled with known patterns. Afterwards `md-kernel` checks:
 - the other tracks' state blocks;
 - the scheduler words;
 - the program;
-- any `--load`ed tables.
+- any `--load`ed tables (the X and Y checks above skip them, so a table can be
+  loaded into internal X).
 
 Any change fails the run with `guard: …`. On success it prints
 `blocks=… worst_block_cycles=… mean_block_cycles=… guards=pass`. Only the JIT
@@ -406,13 +407,20 @@ python3 tools/examples/gnd-sw/build.py --firmware STOCK.bin --asm dsp56300-asm -
 python3 tools/examples/gnd-sw/verify.py --build out/sw --firmware STOCK.bin
 python3 tools/examples/nfx-gn/build.py --firmware STOCK.bin --asm dsp56300-asm --output out/gn
 python3 tools/examples/nfx-gn/verify.py --build out/gn
+python3 tools/examples/nfx-sv/build.py --firmware STOCK.bin --asm dsp56300-asm --output out/sv
+python3 tools/examples/nfx-sv/verify.py --build out/sv
+python3 tools/examples/nfx-4p/build.py --firmware STOCK.bin --asm dsp56300-asm --output out/4p
+python3 tools/examples/nfx-4p/verify.py --build out/4p
 ```
 
 Each `verify.py` runs:
 
 1. **`md-kernel` cases** against the example's `model.py`, in both engines:
    - GND-SW: all MIDI notes, ramp/decay/retrigger, Nyquist clamp;
-   - NFX-GN: 512 random blocks on tracks 1, 15 and 0.
+   - NFX-GN: 512 random blocks on tracks 1, 15 and 0;
+   - NFX-SV and NFX-4P: 50 cases each (every knob value, all VCA zones, a
+     random stress run, tracks 0 and 15), with the tanh table loaded into
+     internal X.
 2. **A booted run** through the monitor: registration read back,
    front-panel selection, live audio and state equal to the model. For GND-SW
    it also checks stock sample budgets, the E12 removal, a RAM-R1 recording and

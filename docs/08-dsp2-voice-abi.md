@@ -183,6 +183,8 @@ waits) must fit in **73,728 cycles**. Planning numbers from the emulator:
 | Stock TRX/EFM/E12/P-I voices | ~2,000–3,200 |
 | GND-SW (example) | 734 default, 2,341 worst |
 | NFX-GN (example) | 154 |
+| NFX-SV (example) | 2,572–2,924 |
+| NFX-4P (example) | 2,931–3,469 |
 
 ### The voice-link slot floor
 

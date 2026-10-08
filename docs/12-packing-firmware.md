@@ -269,8 +269,10 @@ Read-only tables for DSP2 internal X memory go into the same stream, as X
 sections (tag 1). With `mdkit`:
 
 ```python
-stream.append_section('X', 0x280, tanh_table)    # mdkit.image DspStream
+mdkit.machine.add_x_table(stream, 0x280, tanh_table)   # checks the rules below
 ```
+
+The NFX-SV and NFX-4P examples upload their tanh table this way; a build with both would keep one copy.
 
 Rules:
 - **Stay inside the free gap** `X:0x257–0x6FF`. The stock stream's own internal
@@ -295,6 +297,8 @@ reservation, 16 in the code region `0x1B0000–0x1BFFFF`. The examples use:
 | Bank | Machine (ID) |
 | --- | --- |
 | `0x127000` | GND-SW (8) |
+| `0x128000` | NFX-SV (9) |
+| `0x12D000` | NFX-4P (14) |
 | `0x12E000` | NFX-GN (15) |
 
 Code banks in `0x1B0000–0x1BAFFF` have run on hardware. So have banks in
@@ -334,6 +338,15 @@ a descriptor is 86 bytes, a menu entry 4 bytes, and a simple handler well under
 | `0xFF060` | NFX menu: NFX-GN, 0 |
 | `0xFF080` | NFX-GN descriptor |
 | `0xFF200` | ColdFire code: `gain_control`, linked at `0x100FF200` |
+
+**NFX-SV and NFX-4P examples**, bank `0xFF000–0xFFFFF`, laid out as NFX-GN's:
+
+| Offset | Contents |
+| --- | --- |
+| `0xFF000` | Relocated family table: the 9 families left without E12, NFX, terminator (88 bytes) |
+| `0xFF060` | NFX menu: the machine, 0 |
+| `0xFF080` | The descriptor |
+| `0xFF200` | ColdFire code, linked at `0x100FF200`: `svf_control` and its tables (NFX-SV, 1,732 bytes), or that followed by `ladder_control` and its gain table (NFX-4P, 2,092 bytes) |
 
 Several machines can share one ColdFire code blob, linked once. Blobs linked
 separately can call each other's helpers through `--defsym name=address` at

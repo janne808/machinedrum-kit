@@ -46,7 +46,7 @@ machine.
   40–47, 73–79, 86–95, 114–119, 124–127, 164 and 169–175.
 - **26 more are free for custom machines** besides 4–15 (see
   [free IDs](#free-ids)): **30–31, 40–47, 73–79 and 86–94**. The kit's examples
-  use 8 (GND-SW) and 15 (NFX-GN).
+  use 8 (GND-SW), 9 (NFX-SV), 14 (NFX-4P) and 15 (NFX-GN).
 
 The OS resolves defaults, labels and the handler through this table when a
 track is assigned, and stores the handler pointer in the per-track slot
@@ -173,7 +173,7 @@ references** to it:
 | `0x23065A` | `0x252396` (table) | new table |
 | `0x22C210`, `0x231A60`, `0x231ABA`, `0x231B10`, `0x231F22`, `0x235368` | `0x25239A` (table + 4) | new table + 4 |
 
-The NFX-GN example adds NFX this way after removing E12, as the tenth family
+The NFX-GN, NFX-SV and NFX-4P examples add NFX this way after removing E12, as the tenth family
 (an eleventh with E12 kept); the name display and menu code then show it after
 RAM. Verify the eight sites against your image
 before patching: each must contain the original value

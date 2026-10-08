@@ -171,8 +171,17 @@ int main(int argc, char** argv) {
             std::cerr << "guard: " << what << " changed at " << "PXY"[a] << ":0x" << std::hex << addr << "\n";
             std::exit(1);
         };
-        for (TWord a = 0x20; a < 0x800; ++a) if (memory.get(MemArea_X, a) != poison(a)) fail("X memory", MemArea_X, a);
-        for (TWord a = 0x143; a < 0x800; ++a) if (memory.get(MemArea_Y, a) != poison(a ^ 0x5a5a5a)) fail("Y memory", MemArea_Y, a);
+        // A --load into low memory (an internal X table) replaces the poison there; the
+        // loaded-table check below covers those words instead.
+        auto isLoaded = [&](EMemArea area, TWord a) {
+            for (auto& ld : loaded)
+                if (ld.area == area && a >= ld.addr && a < ld.addr + ld.w.size()) return true;
+            return false;
+        };
+        for (TWord a = 0x20; a < 0x800; ++a)
+            if (!isLoaded(MemArea_X, a) && memory.get(MemArea_X, a) != poison(a)) fail("X memory", MemArea_X, a);
+        for (TWord a = 0x143; a < 0x800; ++a)
+            if (!isLoaded(MemArea_Y, a) && memory.get(MemArea_Y, a) != poison(a ^ 0x5a5a5a)) fail("Y memory", MemArea_Y, a);
         for (TWord a = 0x800; a < 0xc00; ++a)
             if ((a < S || a >= S + 0x40) && memory.get(MemArea_Y, a) != kStateFill) fail("another track's state", MemArea_Y, a);
         if (memory.get(MemArea_Y, 0x140) != kCurrentBank || memory.get(MemArea_Y, 0x142) != track) fail("scheduler words", MemArea_Y, 0x140);

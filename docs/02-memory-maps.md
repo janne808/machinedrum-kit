@@ -176,7 +176,8 @@ external accesses and on each cold fetch of its code, since 16 voices share the
   constant inside it.
 
 It is the only sizeable internal data memory a custom machine can use. Its
-established use is a shared read-only tanh table at `X:0x280–0x680` (see
+established use is a shared read-only tanh table at `X:0x280–0x680`, which
+the NFX-SV and NFX-4P examples upload (see
 [DSP programming](13-dsp-programming.md#internal-memory-tables)). The Y gaps
 are small and, at 16 and 124 words, are best left alone.
 
@@ -222,8 +223,8 @@ in area 3.
 machines can use their sample data instead, with **no sample reservation**:
 sample memory, the ROM budget (29.7 s on 48-ROM) and the RAM machines all stay
 stock. The region is in bus area 0, which measured the same as area 2 (about 1
-wait state). The examples use banks `0x127000` (GND-SW) and `0x12E000`
-(NFX-GN). The layout works on hardware: a build with a full delay pool and
+wait state). The examples use banks `0x127000` (GND-SW), `0x128000` (NFX-SV),
+`0x12D000` (NFX-4P) and `0x12E000` (NFX-GN). The layout works on hardware: a build with a full delay pool and
 thirteen code banks here ran with stock sample memory and RAM recording. See [packing](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation).
 
 | Region | Use |

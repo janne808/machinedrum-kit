@@ -159,6 +159,19 @@ class Machine(unittest.TestCase):
         with self.assertRaises(img.ImageError):
             mc.reserve_sample_memory(m, mc.CODE_REGION, 0, 0)  # already applied
 
+    def test_add_x_table(self):
+        _, payloads = helpers.fake_image()
+        s = img.DspStream(payloads['DSP2'])
+        self.assertTrue(mc.add_x_table(s, 0x280, [1, 2, 3]))
+        self.assertEqual([s.read(0x280 + i, 'X') for i in range(3)], [1, 2, 3])
+        self.assertFalse(mc.add_x_table(s, 0x280, [1, 2, 3]))     # identical: shared, not added twice
+        self.assertEqual(sum(x.space == 'X' for x in s.sections), 1)
+        with self.assertRaises(img.ImageError):
+            mc.add_x_table(s, 0x281, [9])                        # overlaps a different table
+        for bad in (0x250, 0x6FF):
+            with self.assertRaises(img.ImageError):
+                mc.add_x_table(s, bad, [0, 0])                   # outside 0x257..0x6FF
+
     def test_lod(self):
         lod = '\n'.join(['P 1FA000 00000C', 'P 1FA001 00000C', 'P 1FA002 00000C',
                          'I 1FA000 machine_init', 'I 1FA001 machine_update', 'I 1FA002 machine_render'])

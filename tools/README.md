@@ -99,16 +99,19 @@ python3 emulator/harness.py build
 
 ## Examples
 
-Both need `dsp56300-asm` ([mborgerson/dsp56300](https://github.com/mborgerson/dsp56300))
-and GNU m68k binutils. Both remove the E12 machines and keep every other stock
-machine, with stock sample memory. Both images were
+All need `dsp56300-asm` ([mborgerson/dsp56300](https://github.com/mborgerson/dsp56300))
+and GNU m68k binutils. All remove the E12 machines and keep every other stock
+machine, with stock sample memory. All images were
 verified in the emulator (registration, front-panel selection, bit-exact
-audio); neither has been flashed to hardware.
+audio); none has been flashed to hardware.
 
 | Example | What it shows |
 | --- | --- |
 | [`examples/gnd-sw`](examples/gnd-sw/) | GND-SW, a MIDI-tuned PolyBLEP saw, appended to the stock GND menu. Stock sample budgets, RAM-R1 recording and the RAM family's new slot are checked. |
 | [`examples/nfx-gn`](examples/nfx-gn/) | The walkthrough machine from [doc 11](../docs/11-writing-a-custom-machine.md): a neighbour effect in a new family, appended to the relocated family table |
+| [`examples/nfx-sv`](examples/nfx-sv/) | NFX-SV, a state-variable filter on the previous track with a trig envelope and a VCA: a handler with real work (table lookups, the tempo) and a tanh table in DSP2 internal X |
+| [`examples/nfx-4p`](examples/nfx-4p/) | NFX-4P, a 4-pole ladder filter with the same controls: a second handler that calls the first, linked into one blob |
+| [`examples/common/nfx`](examples/common/nfx/) | What NFX-SV and NFX-4P share: `svf_control`, its tables, the tanh table, the envelope and VCA models and the verification steps |
 | [`examples/common/guards.s`](examples/common/guards.s) | Sample-loader guards for builds that reserve sample memory instead (not used by the examples) |
 
 Each example has `build.py` (image, `.syx`, `build.json`), `model.py` (bit-exact
@@ -121,6 +124,10 @@ python3 examples/gnd-sw/build.py  --firmware STOCK.bin --asm dsp56300-asm --outp
 python3 examples/gnd-sw/verify.py --build out/sw --firmware STOCK.bin
 python3 examples/nfx-gn/build.py  --firmware STOCK.bin --asm dsp56300-asm --output out/gn
 python3 examples/nfx-gn/verify.py --build out/gn
+python3 examples/nfx-sv/build.py  --firmware STOCK.bin --asm dsp56300-asm --output out/sv
+python3 examples/nfx-sv/verify.py --build out/sv
+python3 examples/nfx-4p/build.py  --firmware STOCK.bin --asm dsp56300-asm --output out/4p
+python3 examples/nfx-4p/verify.py --build out/4p
 ```
 
 ## External tools

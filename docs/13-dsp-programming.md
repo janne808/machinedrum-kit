@@ -437,6 +437,8 @@ compute sines or upload your own table.
 | --- | ---: |
 | GND-SW | 734 default, 2,341 at note 127 with maximum ramp |
 | NFX-GN | 154 |
+| NFX-SV | 2,572 constant cutoff, 2,924 with the envelope on the cutoff and the envelope VCA |
+| NFX-4P | 2,931 constant cutoff, 3,469 with the envelope on the cutoff and the envelope VCA |
 
 As rough guidance from other custom machines built the same way:
 

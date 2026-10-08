@@ -137,6 +137,12 @@ python3 tools/examples/gnd-sw/verify.py --build out/gnd-sw --firmware $FW
 
 python3 tools/examples/nfx-gn/build.py --firmware $FW --asm $ASM --output out/nfx-gn
 python3 tools/examples/nfx-gn/verify.py --build out/nfx-gn
+
+python3 tools/examples/nfx-sv/build.py --firmware $FW --asm $ASM --output out/nfx-sv
+python3 tools/examples/nfx-sv/verify.py --build out/nfx-sv
+
+python3 tools/examples/nfx-4p/build.py --firmware $FW --asm $ASM --output out/nfx-4p
+python3 tools/examples/nfx-4p/verify.py --build out/nfx-4p
 ```
 
 Each build writes a firmware image and an OS update: `out/*/machinedrum-*.bin`
@@ -176,7 +182,7 @@ edits; `setup.py --reset` discards them.
 | 11 | [Writing a custom machine](docs/11-writing-a-custom-machine.md) | End-to-end walkthrough with a from-scratch example |
 | 12 | [Packing firmware](docs/12-packing-firmware.md) | Every edit a build makes, flash bank layouts, checks, SysEx export |
 | 13 | [DSP programming notes](docs/13-dsp-programming.md) | DSP56300 techniques and pitfalls, cycle budgeting |
-| 14 | [Custom machine reference](docs/14-custom-machine-reference.md) | The kit's machines, GND-SW and NFX-GN: algorithms, packets, state, cost |
+| 14 | [Custom machine reference](docs/14-custom-machine-reference.md) | The kit's machines, GND-SW, NFX-GN, NFX-SV and NFX-4P: algorithms, packets, state, cost |
 | 15 | [Disassembly guide](docs/15-disassembly-guide.md) | Extracting and disassembling ColdFire and DSP code correctly |
 | 16 | [Emulation and verification](docs/16-emulation-and-verification.md) | Emulator limits, test methodology, hardware lessons |
 | 17 | [Open questions and errata](docs/17-open-questions.md) | What is unknown, and corrections to older notes |
@@ -196,8 +202,8 @@ from the example in `tools/examples/nfx-gn`.
 - `emulator/`, the headless emulator used for every result here: a smoke
   test, a three-processor debugger and a kernel runner. Third-party code is
   pulled in as git submodules and patched at build time (doc 18);
-- two example machines, GND-SW and NFX-GN, with build scripts, reference
-  models and verifiers.
+- example machines with build scripts, reference models and verifiers:
+  GND-SW, NFX-GN, and the NFX-SV and NFX-4P filters.
 
 ## Where this comes from
 

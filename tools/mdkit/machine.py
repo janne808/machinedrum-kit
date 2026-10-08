@@ -264,6 +264,27 @@ def clear_dispatch(dsp, dsp_type):
         dsp.write(table + dsp_type, dsp.read(table))
 
 
+INTERNAL_X_FREE = (0x257, 0x700)   # DSP2 internal X the stock OS never uses (docs/02-memory-maps.md)
+
+
+def add_x_table(dsp, address, words):
+    """Upload a read-only table into DSP2 internal X at boot, as an X section.
+    It must lie in the free gap; an identical table already there is kept (two
+    machines may share one), a different one that overlaps is refused."""
+    words = [w & 0xFFFFFF for w in words]
+    end = address + len(words)
+    if not (INTERNAL_X_FREE[0] <= address and end <= INTERNAL_X_FREE[1]):
+        raise ImageError(f'X:0x{address:x}..0x{end - 1:x} is outside the free gap 0x257..0x6FF')
+    for s in dsp.sections:
+        if s.space == 'X' and s.address < end and address < s.address + s.count:
+            if (s.address, s.count) == (address, len(words)) and \
+                    [dsp.read(address + i, 'X') for i in range(len(words))] == words:
+                return False
+            raise ImageError(f'X:0x{address:x} overlaps an uploaded X section at 0x{s.address:x}')
+    dsp.append_section('X', address, words)
+    return True
+
+
 def add_program(dsp, bank, capacity, code, reserved=()):
     """Upload `code` at P:bank; refuse overlaps with stock sections or `reserved`
     [(start, count)] regions."""

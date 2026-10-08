@@ -1,7 +1,8 @@
 # Custom machine reference
 
-The kit's two machines, as worked examples of the ABI: a generator (GND-SW)
-and a neighbour effect (NFX-GN). Both have complete sources and build scripts
+The kit's machines, as worked examples of the ABI: a generator (GND-SW), a
+minimal neighbour effect (NFX-GN) and two neighbour filters (NFX-SV, NFX-4P).
+All have complete sources and build scripts
 in [`tools/examples`](../tools/examples/). For each: identity, algorithm,
 packet and state layout, and cost.
 
@@ -13,8 +14,10 @@ are higher.
 | --- | --- | --- | --- | --- | ---: |
 | GND-SW | 8 / 9 | GND (fifth entry) | `0x127000` | Generator | 734 default, 2,341 at note 127 with maximum ramp |
 | NFX-GN | 15 / 16 | NFX (new family after RAM) | `0x12E000` | Neighbour effect | 154 |
+| NFX-SV | 9 / 10 | NFX | `0x128000` | Neighbour filter | 2,572–2,924 |
+| NFX-4P | 14 / 15 | NFX | `0x12D000` | Neighbour filter | 2,931–3,469 |
 
-Both use the E12 layout: the E12 machines are removed and the banks sit in
+All use the E12 layout: the E12 machines are removed and the banks sit in
 their former sample area, in bus area 0 (see
 [packing](12-packing-firmware.md#removing-e12-instead-memory-without-a-reservation)).
 Sample memory and every other stock machine stay.
@@ -107,6 +110,33 @@ written in full in [doc 11](11-writing-a-custom-machine.md).
 It is deliberately unoptimized. The multiply can take the next sample's load as
 a parallel move, which would roughly halve the loop.
 
+## NFX-SV and NFX-4P: neighbour filters
+
+A state-variable filter and a 4-pole ladder with the same eight knobs (FREQ,
+RESO, MODE, ENVA, ATK, DEC, GAIN, VCA), a trig-driven AD envelope on the cutoff
+and an envelope or gate VCA. The full description, packet and state layouts,
+and hardware costs are in the examples' READMEs:
+[NFX-SV](../tools/examples/nfx-sv/README.md), [NFX-4P](../tools/examples/nfx-4p/README.md)
+and what they share, [common/nfx](../tools/examples/common/nfx/README.md).
+What they show beyond NFX-GN:
+
+- **A handler that calls another.** NFX-4P links `svf_control` (shared) and its
+  own `ladder_control` into one blob; `ladder_control` calls `svf_control`, then
+  replaces two words.
+- **A table in internal X.** Both read a 1,025-word tanh table at `X:0x280`,
+  uploaded as an X section (`mdkit.machine.add_x_table`, which keeps a single
+  copy when machines share it). Internal reads cost no wait states.
+- **Real handler work.** Table lookups with interpolation, a split
+  coefficient (a 24-bit mantissa plus a scale flag in bit 23), and a gate
+  length computed from the OS tempo word.
+- **Block-rate control.** The envelope advances once per block by its exact
+  32-sample step, the cutoff and the VCA gain ramp linearly across the block,
+  and each machine has one filter loop per mode and envelope state, picked once
+  per block.
+- **Scheduled for the pipeline.** The filter loops were rescheduled with the
+  interlock rules in [DSP programming](13-dsp-programming.md#pipeline-interlocks);
+  they are the filters in its results table.
+
 ## Building your own
 
 Start from the example whose shape is closest:
@@ -114,7 +144,7 @@ Start from the example whose shape is closest:
 - **A generator** keeps phases and envelopes in its private state words and
   ignores the neighbour bank (GND-SW).
 - **A neighbour effect** reads `Y:0x140 ^ 0x20` and must output silence on
-  track 0 (NFX-GN).
+  track 0 (NFX-GN; NFX-SV and NFX-4P for one with envelopes, state and tables).
 - **An effect with memory** (a delay line) needs per-track storage outside the
   64-word state block. The E12 layout has a 16-track pool for it at
   `0x104000 + 0x2000·t` (`mdkit.machine.E12_POOL`). With E12 kept, reserve it
