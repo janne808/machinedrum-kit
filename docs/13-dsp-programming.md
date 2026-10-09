@@ -233,8 +233,8 @@ kit and was ~1.5× lower than the estimate in another. Use the estimate to rank
 hot spots and to predict improvements. Measure the absolute cost with a load
 meter.
 
-**The slot floor caps the gain.** A machine already under ~3,100 cycles per
-track on hardware gains nothing from scheduling (see [budgeting](#budgeting)).
+**The slot floor caps the gain.** A machine already under the floor (3,072
+cycles plus dispatch; about 3.1k–3.5k on hardware) gains nothing from scheduling (see [budgeting](#budgeting)).
 Schedule the machines that are above the floor, and the hot loops of
 multi-track machines.
 
@@ -333,13 +333,16 @@ compute sines or upload your own table.
 
 - **73,728 cycles** per block for DSP2's whole producer pass: 16 renders plus
   dispatch, updates, interrupts and DMA waits.
-- **Every track costs at least ~3,000 cycles** (~3,100 measured on hardware):
-  the time to send its 32-word block to DSP1. DSP2 waits for the previous transfer before the next one. Budget
-  `sum(max(render + ~100, ~3,000))`, not the sum of renders (see the
+- **Every track costs at least 3,072 cycles**, the time to send its 32-word
+  block to DSP1 (96 cycles per word). DSP2 renders into one of two buffers and
+  waits for the previous transfer before starting the next, so time below the
+  floor is lost, not banked. Budget `sum(max(render + ~40, 3,072))`, not the
+  sum of renders. The 16 transfers alone take 49,152 cycles; about 24k is left
+  for render time above the floor (see the
   [voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
   - An **idle** track renders for 3,438 cycles (the fallback renderer's
     padding), about one transfer.
-  - A cheaper machine on that track saves only the part above ~3,000.
+  - A cheaper machine on that track saves only the part above 3,072.
 - **Work in a track's slot is free up to the floor.** A machine that occupies
   two tracks gains from the second only by moving real work into that
   track's render; a second render that just writes zeros still costs a full
@@ -408,11 +411,15 @@ compute sines or upload your own table.
   Add the **pipeline interlocks** the emulator does not charge either
   ([above](#pipeline-interlocks)): up to 10–25 % in unscheduled inner loops.
 
-  **Hardware budget (2026-10-05).** Kits of 14–15 identical machines plus a load
-  meter put the usable total for the 16 track slots at **about 68k cycles per
-  block** on hardware, with every slot costing at least **~3,100**. Fifteen
-  plain oscillators, fifteen PWM oscillators with slide and seven two-track
-  reverbs all left exactly the same headroom: they all sit on the floor.
+  **Hardware budget (2026-10-05, 2026-10-09).** Fifteen plain oscillators,
+  fifteen PWM oscillators with slide, seven two-track reverbs and fourteen
+  delays all left exactly the same load-meter headroom, about 21.5k cycles:
+  they all sit on the floor. The 15 floor slots therefore take about 52k cycles
+  on hardware. That is about 3.11k per slot in a block of about 68k usable
+  cycles, or about 3.48k per slot in the full 73,728; one meter reading cannot
+  separate the two (see the
+  [voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
+  The hardware per-instance figures in these docs use the first reading.
 
   Count code words a typical block executes, not every word a long run ever
   touches. Start-up and rarely taken paths inflate the latter: here 1,020
@@ -442,7 +449,7 @@ compute sines or upload your own table.
 
 As rough guidance from other custom machines built the same way:
 
-Render costs only; each track still costs at least ~3,000 of the pass.
+Render costs only; each track still costs at least 3,072 of the pass.
 
 | Kind of machine | Cycles/block |
 | --- | ---: |

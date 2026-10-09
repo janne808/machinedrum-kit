@@ -34,8 +34,8 @@ doubles. This is how a deadline miss shows up.
 
 **The voice link paces DSP2.** DSP2 sends each voice block (32 words) with
 DMA0 over ESSI0 and waits for the previous block's transfer before starting the
-next. One transfer takes about 2,900–3,000 DSP2 cycles (emulator), so DSP2 can
-deliver at most one voice per ~3,000 cycles, whatever the renders cost (see the
+next. One transfer takes 32 words × 96 cycles = 3,072 DSP2 cycles, so DSP2 can
+deliver at most one voice per 3,072 cycles, whatever the renders cost (see the
 [voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
 
 **DSP1's work includes waiting for DSP2.** DSP1's own processing is about 59k

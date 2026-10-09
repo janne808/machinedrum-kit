@@ -48,8 +48,8 @@ loop (`DO #50` of two NOPs per sample, at `P:0x100093`). It costs **3,438 cycles
 
 **What the padding is for.** It makes an idle track's render last about one
 voice transfer.
-- **The transfer:** each track's 32-word block takes about 2,900–3,000 DSP2
-  cycles to cross ESSI0 to DSP1. The dispatcher starts a block's transfer only
+- **The transfer:** each track's 32-word block takes 3,072 DSP2 cycles
+  (96 per word) to cross ESSI0 to DSP1. The dispatcher starts a block's transfer only
   after the previous one has finished (see the
   [voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
 - **The effect:** with the padding, an idle track takes the same share of the
@@ -60,14 +60,14 @@ voice transfer.
 
 **Consequences:**
 - **An idle track costs about one slot either way.** Custom machines that
-  render in less than ~3,000 cycles are not cheaper in practice: their slot is
+  render in less than 3,072 cycles are not cheaper in practice: their slot is
   the transfer time.
 - **Shortening the pad saves little:** only the ~400 cycles by which
   3,438 + dispatch exceeds the transfer time (see
   [packing](12-packing-firmware.md#optional-dsp2-edits)).
 
-The transfer time was measured in the emulator. Hardware load-meter kits
-confirm a floor of about 3,100 cycles per track
+The transfer time follows from the ESSI0 setup. On hardware, floor-bound kits
+cost about 3.1k–3.5k cycles per track, depending on the block length
 ([voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
 
 **E12 samples** are packed two 12-bit samples per word. The reader halves the

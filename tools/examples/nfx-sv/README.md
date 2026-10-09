@@ -73,7 +73,7 @@ Emulator cycles per block (mean, sine input):
 
 **On hardware**, with the same DSP code in a custom build (a generator, 14
 instances with the envelope on the cutoff and the envelope VCA, and a load meter
-on track 16): about 3,470 cycles per instance. The meter first underran at 37 steps of 512 cycles: 18,400–18,900 cycles were still free. It is above the ~3,100-cycle per-track floor, so its cost
+on track 16): about 3,470 cycles per instance. The meter first underran at 37 steps of 512 cycles: 18,400–18,900 cycles were still free. It is above the per-track floor (3,072 cycles plus dispatch; per-instance figures assume about 68k usable cycles per block, see [the slot floor](../../../docs/08-dsp2-voice-abi.md#the-voice-link-slot-floor)), so its cost
 adds up in a full kit (see
 [budgeting](../../../docs/13-dsp-programming.md#budgeting)).
 
