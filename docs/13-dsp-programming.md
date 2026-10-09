@@ -233,10 +233,91 @@ kit and was ~1.5× lower than the estimate in another. Use the estimate to rank
 hot spots and to predict improvements. Measure the absolute cost with a load
 meter.
 
+**Arithmetic and transfer stalls may be cheaper than estimated (2026-10-09).**
+Five loops of the two-track reverb were rescheduled, bit-exact, removing 253 of
+its 476 estimated interlock cycles per pair. Almost all were arithmetic and
+transfer stalls.
+- **Expected:** with four pairs and a load meter, the first underrun should
+  have moved by about two 512-cycle steps.
+- **Measured:** it did not move at all, so less than about 130 cycles per pair
+  were freed.
+- **The earlier 880:** the result in the table above came from a kit whose
+  slots sat at the floor, so it was never a clean check.
+- **Rule for now:** treat estimated arithmetic and transfer stalls as an upper
+  bound. AGU interlocks have not been tested on their own; avoid them anyway
+  (see [instruction cache](#instruction-cache)).
+
 **The slot floor caps the gain.** A machine already under the floor (3,072
 cycles plus dispatch; about 3.1k–3.5k on hardware) gains nothing from scheduling (see [budgeting](#budgeting)).
 Schedule the machines that are above the floor, and the hot loops of
 multi-track machines.
+
+## Instruction cache
+
+DSP2 runs all machine code, stock and custom, from external SRAM through a
+1K-word instruction cache. The cache has eight sectors of 128 words with LRU
+replacement and a valid bit per word. The emulator does not model it, so its
+cost is invisible there. Measured on hardware, a missed code word costs about
+one cycle in bus area 0, the same as an external data read.
+
+**Two effects decide the cost:**
+- **Sweeps over more than eight sectors refetch.** When a render touches more
+  than eight sectors in one pass, LRU evicts the oldest before the next pass
+  returns to them. A render that runs the same code twice per block (two
+  chunks, say) then fetches it twice.
+- **Machines that fit stay cached.** If a machine's hot code fits in eight
+  sectors, the next instance on the next track finds it still cached. Each
+  instance after the first in a run of adjacent tracks then fetches almost
+  nothing. This is a cliff: 1,100 hot words give almost no reuse, 1,000 give
+  almost all of it.
+
+**Measuring it.** Record one typical block's executed PCs (a per-instruction
+trace of the render calls) and replay them through a 40-line model: eight
+sectors of 128 words, LRU, a valid bit per word, internal P uncached. Count the
+misses per render for a run of instances, with stock code before and after.
+
+**Shrinking the hot code.** All of these left the output bit-identical:
+- **Hot and cold layout.** Emit code into sections: the hot path of each track,
+  shared subroutines, cold rate paths, and the slow paths out of line (each
+  ending in a jump back). Fast paths then fall through instead of jumping over
+  slow ones.
+- **One modulo setting per render.** If every delay buffer is 8K-aligned (the
+  kit's pool slices are) and everything else the code steps through lies
+  inside the first 8K (X scratch, the I/O blocks, the state), set M0–M5 to
+  $1FFF at render entry. Modulo and linear addressing then agree everywhere,
+  and no loop sets or restores a modifier.
+  - **Interrupts:** the DSP2 host interrupt sets M0 itself and uses R1/R2
+    without update.
+  - **Exit:** the dispatcher resets the modifiers before the next render.
+- **Pointers in the AGU.** Keep `base + n` (the ring head) in a state word.
+  - **Single pointers:** a ring pointer is then `head + OFFSET − delay`, two
+    modulo updates (`(Rn)+Nn`, `(Rn)-Nn`) instead of eight to ten words of
+    arithmetic and masking.
+  - **Groups:** load all heads and offsets first and put independent setup
+    instructions between the loads and the updates, to avoid the AGU
+    interlock.
+- **Share duplicated code.** Two branches that differ only in constants can
+  call one subroutine with the constants in registers. Negating inputs for one
+  branch can stand in for a sign flip.
+- **Keep the stub the tools expect.** If a loader places the program at the
+  init entry, keep `machine_init` at the bank start as a jump to the cold
+  body.
+
+**Results.** A two-track reverb at a 44.1 kHz tank rate, with a generator, four
+pairs and a load meter on hardware. Steps are 512 cycles:
+
+| Change | Hot code per pair | Modelled code-word misses per pair | First underrun |
+| --- | ---: | ---: | ---: |
+| Interleaved hot and cold code | 1,231 words, 9–10 sectors per chunk | 1,926 | 11 steps |
+| Hot/cold layout | 1,209 words, 7–8 sectors per chunk | 1,093–1,209 | 14 |
+| + rescheduled loops (interlocks) | about the same | 1,053–1,256 | 14 |
+| + one modulo setting, AGU pointers, shared code: 968 words in 8 sectors | 968 | 482 for the first pair, 0 for later pairs | **22** |
+
+- **Capacity:** with the last change, a generator plus seven pairs at 44.1 kHz,
+  every track of the kit, ran with a load meter reaching 11 steps.
+- **Before:** five pairs did not fit.
+- **Margin:** the hot span had 6 words to spare. Recheck with the cache model
+  after any edit to a hot path.
 
 ## Internal-memory tables
 
@@ -377,10 +458,16 @@ compute sines or upload your own table.
     the kit's code region and delay pool sit, and about 5 in area 3.
   - **External data accesses:** count every X/Y access outside internal memory
     per block, including both moves of a dual X/Y move.
-  - **Executed code words:** count each code word once per block, however
-    often it runs. Sixteen voices share the 1K-word instruction cache, so a
-    render starts cold and fetches each word it executes about once. Loops
-    pay only on their first pass.
+  - **Executed code words:** really the code words *fetched*, that is, cache
+    misses. As a first estimate, count each word a render executes once per
+    block (a render starts cold, loops pay on their first pass).
+    - **Bigger renders:** when the hot code spans more than the cache's eight
+      sectors, words it runs twice in a block are fetched twice.
+    - **Repeated machines:** consecutive instances of a machine whose hot code
+      fits the cache fetch nearly nothing.
+    - **Measuring it:** model the cache on a PC trace; see
+      [instruction cache](#instruction-cache). Measured on hardware: about
+      **1 cycle per missed word** in area 0.
 
   Count both per render with a per-instruction trace (monitor `trace cpu`).
   One trap: an emulator that runs a one-instruction `do` loop as a single step
