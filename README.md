@@ -226,5 +226,6 @@ hardware (see [emulation and verification](docs/16-emulation-and-verification.md
 
 ## Legal
 
-This work is not affiliated with or endorsed by Elektron. Elektron owns the Machinedrum firmware. This repository documents its structure for interoperability and contains none of the firmware. You need your own copy of the firmware to use it. Images built with the kit contain Elektron’s firmware, so don’t share them; share your machine’s source and let others build it from their own copy. Flashing modified firmware is at your own risk, but the boot-ROM updater never erases its own sector, so a device can always be recovered by sending the stock OS update
-(see [SysEx updates](docs/05-sysex-updates.md#recovery)).
+This work is not affiliated with or endorsed by Elektron. Elektron owns the Machinedrum firmware. This repository documents its structure for interoperability and contains none of the firmware. You need your own copy of the firmware to use it. Images built with the kit contain Elektron’s firmware, so don’t share them; share your machine’s source and let others build it from their own copy. Flashing modified firmware is at your own risk. The boot-ROM updater never erases its own sector, so a bad OS can usually be replaced by sending the stock OS update
+(see [SysEx updates](docs/05-sysex-updates.md#recovery)). There is one exception. On every boot, MainOS can erase and rewrite the boot sector, updater included, from a copy it carries. An image that alters that copy or its check can leave a device that only an external flash programmer can recover. Never edit those MainOS bytes; see
+[first-run boot-sector programming](docs/03-firmware-image.md#first-run-boot-sector-programming).

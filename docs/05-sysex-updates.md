@@ -143,11 +143,12 @@ upwards and also never touches `0x0000–0x3FFF`.
 
 ## Recovery
 
-The updater and bootloader live in the never-erased boot sector, and the boot
-code checks the upgrade flag before it decompresses anything. A bad OS image
-(one that hangs, fails a checksum, or crashes the OS) can therefore always be
-replaced: enter the upgrade mode and send the stock `.syx` (**Static**: this
-follows from the updater code).
+The updater and bootloader live in the boot sector, which the updater never
+erases, and the boot code checks the upgrade flag before it decompresses
+anything. A bad OS image (one that hangs, fails a checksum, or crashes the OS)
+can therefore be replaced by entering the upgrade mode and sending the stock
+`.syx` (**Static**: this follows from the updater code). There is one
+exception, below.
 
 > [!WARNING]
 > **The exception is MainOS's first-run boot-sector programming.** The boot

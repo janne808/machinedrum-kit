@@ -8,7 +8,7 @@ an OS update.
 
 | Flash offset | Size | Contents |
 | --- | --- | --- |
-| `0x000000–0x003FFF` | 16 KiB | **Boot sector**: ColdFire vectors, bootloader, decompressor, DSP bootstrap stubs, **MIDI updater**. Never erased by the updater. |
+| `0x000000–0x003FFF` | 16 KiB | **Boot sector**: ColdFire vectors, bootloader, decompressor, DSP bootstrap stubs, **MIDI updater**. Never erased by the updater, but MainOS erases and rewrites it if the magic at `0x3FFE` is missing ([first-run programming](#first-run-boot-sector-programming)). |
 | `0x004000` | 8 + 164,328 | Blob **MainOS** (ColdFire OS) |
 | `0x02C1F0` | 8 + 587,978 | Blob **DSP2** (producer program and data) |
 | `0x0BBAC2` | 8 + 39,310 | Blob **DSP1** (mixer program and data) |
