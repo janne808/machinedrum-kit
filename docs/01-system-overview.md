@@ -44,14 +44,15 @@ flowchart LR
 | --- | --- |
 | Sample rate | 44,100 Hz |
 | Block | 32 samples (0.726 ms) |
-| DSP clock (board model) | 101,606,400 Hz = 2,304 cycles per sample |
-| **Cycles per block, per DSP** | **73,728** |
+| DSP1 clock | 101,606,400 Hz = 2,304 cycles per sample (its program sets PCTL) |
+| DSP2 clock | 98,784,000 Hz = 2,240 cycles per sample (its program never writes PCTL; the boot stub's PLL setting stays) |
+| **Cycles per block** | **73,728 on DSP1, 71,680 on DSP2** |
 
 Each audio block, DSP2 runs its **producer pass**: 16 voice calls, each writing
 32 samples. Each finished block is DMA'd to DSP1 while the next voice renders.
 DSP1 starts processing arriving voice blocks while DSP2 is still producing later
-ones. Both DSPs must finish within their own 73,728-cycle budget. The two
-budgets cannot be pooled.
+ones. Both DSPs must finish within their own budget (73,728 cycles on DSP1,
+71,680 on DSP2). The two budgets cannot be pooled.
 
 A block missed on either side causes an audible glitch: a repeated old DAC half
 or a stale voice. A severe DSP2 overrun on hardware first crackled, then lit

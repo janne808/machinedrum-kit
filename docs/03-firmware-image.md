@@ -37,8 +37,10 @@ Every blob is a header followed by compressed data:
 ```
 
 - The checksum covers the **compressed** bytes. Older notes say "sum of
-  decompressed data", which is wrong. All five stock checksums match the
-  compressed-byte sum.
+  decompressed data", which is wrong. All five stock 1.63 checksums match the
+  compressed-byte sum. (Stock X.13 carries 1.63's header words, size and sum,
+  in its MainOS, DSP2 and DSP1 blobs although its compressed bytes differ, and
+  it boots: see below.)
 - Records follow each other with **no padding**:
   `next = start + 8 + compressed_size`.
 - The version record is 4 raw bytes between DSP1 and OS_A and is **not covered by
@@ -103,8 +105,16 @@ reset (PC = 0xC)
   clear 0x1000000..0x1001FFF, jump to 0x200000
 ```
 
-Each decompression verifies its checksum. Failures print `E: DSP2 CHECKSUM`,
-`E: DSP1 CHECKSUM`, `E: OS CHECKSUM` or `E: NO DSP` and halt. A warm-start marker
+The boot code does not verify the header checksum: stock OS X.13 ships with
+stale 1.63 header words in three of its blobs and boots, and an image with a
+wrong sum has booted on hardware. The decoder never reports an error either:
+its only exit is at the end-of-stream marker and it always returns 0
+(`clr.l d0` before the single `rts` at boot `0x378`), while its callers halt
+only on a return of 1. So the `E: DSP2 CHECKSUM`, `E: DSP1 CHECKSUM` and
+`E: OS CHECKSUM` halts are unreachable, and so is `E: NO DSP`, which follows a
+return of 1 from `0x1D6C` and ignores the upload's own result. A corrupt
+stream crashes or hangs rather than halting with a message. Keep the header
+sum correct anyway; other tools read it. A warm-start marker
 at RAM `0x17FFF8` (`'DAVE'` / `'AnDY'`) lets the loader skip redecompressing
 OS_A.
 

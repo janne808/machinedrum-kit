@@ -78,10 +78,53 @@ Kit record layout (offsets within the record):
 | `+0x010` | 16 × 24 | Track parameters: 8 synthesis, 8 track-effect, 8 routing bytes per track (`+0x10 + 24·t`) |
 | `+0x190` | 16 | Track levels |
 | `+0x1A0` | 16 × 4 | **Firmware machine ID per track**, big-endian u32 (`+0x1A0 + 4·t`) |
-| `+0x1E0…+0x45F` | | Further per-track records and MIDI/trigger mapping. Not interpreted here; preserve verbatim. |
+| `+0x1E0` | 16 × 36 | Per-track LFO records (`+0x1E0 + 36·t`) |
+| `+0x420` | 4 × 8 | Master-effect blocks (reverb, delay, EQ, dynamics; the same order as the SysEx kit dump) |
+| `+0x440` | 16 | **Trig group** per track (`+0x440 + t`): the partner track `0..15`, or `0xFF` for none. `0` means track 1, not "none" |
+| `+0x450` | 16 | **Mute group** per track (`+0x450 + t`): the partner track `0..15`, or `0xFF` for none |
 
 So the current kit's machine IDs are at `0x7001AA + 4·t` and its synthesis knobs
 at `0x70001A + 24·t`.
+
+### Trig and mute group bytes are used as unchecked indexes
+
+The per-track group setters (SysEx `65 <trigger track> <triggered track>` and
+`66 <control track> <muted track>`, and the EDIT KIT pages) store only `0..15`
+or `0xFF`; a value above 15 is clamped to `0xFF`. The readers are not so
+careful. At least two stock routines reject only `0xFF` and then use the byte
+as a signed index (OS 1.63 MainOS addresses):
+
+- `0x20B3BE`, the mute group of a trigged track: the byte is sign-extended,
+  compared with −1 only, and then used as the index of a one-byte flag store
+  based at `0x1001510`.
+  Any byte other than `0xFF` writes a 1 to `0x1001510 + value`: `0x10..0x7F`
+  lands up to `0x7F` bytes past the 16-entry flag table, `0x80..0xFE` up to
+  `0x80` bytes before it, all of it live internal-SRAM state.
+- `0x20CE2A` (inside the routine at `0x20CC48`, reached from the note-off
+  path), the trig group: the same "only −1 is rejected" test, after which the
+  value selects 24-byte rows in several tables, including the kit parameters at
+  `0x70001A + 24·group`. When that routine is live in normal use is not pinned.
+- The trig-group chain walk and the EDIT KIT group pages range-check or only
+  display, so they are harmless.
+
+Bad bytes reach the working kit through a whole-kit SysEx receive, which stores
+`+0x440..+0x45F` verbatim, followed by a kit load. A kit image that leaves these
+32 bytes at zero is memory-safe but puts every track in a group with track 1.
+Any value `0x10..0xFE` is the corrupting case. On an X.13-based build one
+mute-group byte of `0x74` on one track made every trig of that track write into
+another track's DSP2 push count; the next push sent about 16.7 M words to the
+DSP at the highest interrupt level and the ColdFire stopped servicing incoming
+notes for seconds at a time while both DSPs kept running. Setting all 32 bytes
+to none (the per-track setters with value `0x7F`) cured it without a firmware
+change.
+
+To reproduce in the emulator: write `0x74` to working kit `+0x450 + t`, trigger
+track `t`, and watch writes to `0x1001490..0x100158F`.
+
+Two fixes, independent of each other: treat any value above 15 as none in both
+readers (an unsigned compare against 15 in place of the equality test against
+`0xFF`; two bytes per site, length-preserving), and validate `+0x440..+0x45F`
+to `{0..15, 0xFF}` whenever a tool reads or writes a kit.
 
 Parameter bytes are 0..127. A fresh assignment loads the descriptor's
 defaults. A kit saved with an **earlier version** of a custom machine keeps its

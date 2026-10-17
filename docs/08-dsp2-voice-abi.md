@@ -175,7 +175,8 @@ Rules for pool memory:
 ## Timing
 
 The whole producer pass (16 renders plus dispatch, updates, interrupts and DMA
-waits) must fit in **73,728 cycles**. Planning numbers from the emulator:
+waits) must fit in **71,680 cycles** on hardware (see *The maximum* below; the
+emulator, which clocks DSP2 at DSP1's rate, gives 73,728). Planning numbers from the emulator:
 
 | Item | Cycles per block |
 | --- | --- |
@@ -194,8 +195,17 @@ block to DSP1 sets a minimum time per track.
 
 **The transfer.** DSP2 sends each 32-word track block over ESSI0 with DMA0. DSP2
 clocks the link (CRA0 `$180801`, CRB0 `$33138`: 24-bit words, internal clock,
-network mode). One word takes **96 DSP cycles**, so a block takes
-**32 × 96 = 3,072 cycles**. DSP1 receives with DMA4 into its 512-word ring
+network mode). CRB0 also selects a bit-length frame sync (`FSL1:FSL0 = 10`).
+The DSP56303 User's Manual (rev 1, section 7.5.2, the FSL timing figure) notes
+that the frame sync occupies one bit time preceding the data, so by that
+reading one word takes 25 bit clocks = **100 DSP2 cycles** and a block
+**32 × 100 = 3,200 cycles**. That is a register decode, not a direct
+measurement: the per-word timing has not been scoped. What is measured on
+hardware is the floor slot (transfer plus DMA turnaround and dispatch): about
+**3,290 cycles**, 102.8 per word, fitted from a crackle-threshold ladder and
+confirmed by an on-device cycle meter to within one meter step. The fit is
+within 3 % of a 25-bit word but cannot by itself separate 25 bits from 24 bits
+plus an inter-word gap. DSP1 receives with DMA4 into its 512-word ring
 `Y:0x600–0x7FF`.
 
 **The double buffer.** The dispatcher has two output buffers, `Y:0x100` and
@@ -208,17 +218,18 @@ network mode). One word takes **96 DSP cycles**, so a block takes
 
 Track k's transfer runs during track k+1's render, so each track takes
 
-    slot = max(render + ~40, 3,072)
+    slot = max(render + ~40, 3,200)       # 3,200 by register decode; about 3,290 measured on hardware
 
 **Below the floor.** A render shorter than the transfer leaves DSP2 spinning at
 `P:0xCF` for the difference. That time is lost:
 - **Nothing is banked.** With two buffers, DSP2 can be at most one block ahead
   of the link. A short slot's leftover time cannot help a later, longer render.
-- **Long renders idle the link.** While a render runs longer than 3,072 cycles,
+- **Long renders idle the link.** While a render runs longer than 3,200 cycles,
   the link finishes the previous block and sits idle.
 
 Breakpoints at `P:0xB4`, `P:0xB5` and `P:0xD1` in the emulator show the
-pattern. Its measured slots come out slightly under the nominal 3,072:
+pattern. Its measured slots come out slightly under the nominal 3,072 that the
+emulator's 96-cycle word gives:
 
 | Track | Render | Wait for the link | Slot |
 | --- | ---: | ---: | ---: |
@@ -233,16 +244,27 @@ costs at least one transfer, however cheap its render.
 (`PDRC`) until DSP1 toggles it, and starts the master-return DMA2 there. Each
 pass is aligned to DSP1's block.
 
-**The maximum.** A block is 32 frames × 2,304 = **73,728 DSP cycles** (101.6064
-MHz, the emulator's clock).
-- **Link time:** the 16 transfers take 16 × 3,072 = **49,152 cycles**, two
-  thirds of the block. That is the shortest possible pass.
-- **Render room:** what is left, about 24.6k cycles less dispatch, sync and
+**The maximum.** A block is 32 frames × 2,240 = **71,680 DSP2 cycles**. The two
+DSPs run at different core clocks: DSP1's program writes PCTL as its first
+instruction and runs at 101.6064 MHz (2,304 cycles per sample, 73,728 per
+block), while DSP2's program never writes PCTL and keeps the PLL setting of
+the host-boot stub that the boot routine (`0x932`) sends to each DSP before
+the main program. In 1.63 the DSP2 stub at boot `0x378D` (sent to `0x600000`)
+begins with `movep #$FD008B,x:PCTL`: 11.2896 MHz × 140/16 = 98.784 MHz, 2,240
+cycles per sample; the DSP1 stub at `0x35C2` (to `0x500000`) uses `$FD008D`,
+which DSP1's program replaces with `$3D0023` at `P:$24`. The X.13 stub writes
+the same `$FD008B`, and the main upload streams through the stub without a
+reset. The emulator clocks both at 101.6 MHz, which is where the 73,728 figure
+for DSP2 came from.
+- **Link time:** the 16 transfers take 16 × 3,200 = **51,200 cycles** by the
+  register decode (16 × 3,290 = 52,640 by the measured floor), about 71 % of
+  the block. That is the shortest possible pass.
+- **Render room:** what is left, about 20.5k cycles less dispatch, sync and
   interrupts, is all the render time a kit has above the floor. One track can
   take it, or many can share it.
 - **Budget:**
 
-      sum over the 16 tracks of max(render + ~40, 3,072) + overhead  <=  73,728
+      sum over the 16 tracks of max(render + ~40, 3,200) + overhead  <=  71,680
 
   not the sum of the renders.
 - **The deadline:** DSP1 processes each track as it arrives (`P:0x73` waits on
@@ -272,13 +294,15 @@ headroom: **42 steps, about 21.5k cycles**.
 - **2026-10-09:** a generator and fourteen 1,760-cycle delays. The emulator's
   threshold for that kit is 53 steps.
 
-So 15 floor slots take about 52.2k cycles on hardware, against 46.6k in the
-emulator. One meter reading cannot tell which of two causes is at work:
-
-| Reading | Per slot | Block |
-| --- | ---: | ---: |
-| The block is 73,728 cycles on hardware too; each floor slot costs about 370 cycles more than in the emulator | about 3.48k | 73,728 |
-| The slot costs what it does in the emulator, but the block holds fewer DSP cycles: the DSPs run at about 94 MHz and the codec rate is set from outside | about 3.11k | about 68.3k |
+With the hardware clock the reading resolves without a surcharge: the block is
+71,680 DSP2 cycles, so 15 floor slots plus pass overhead take
+71,680 − 21,504 = 50,176 cycles, **3,345 per slot**, within one 512-cycle meter
+step of the 3,290 measured on hardware. The 5.6k gap between hardware and the
+emulator decomposes as 2,048 (73,728 → 71,680) + 15 × 128 (100 instead of 96
+cycles per link word, the 25-bit reading) + 15 × ~90 (DMA turnaround), about
+5.3k. Neither a 370-cycle
+per-slot surcharge nor a 94 MHz clock is needed; both effects are real and
+smaller than either reading assumed.
 
 DSP1 decides at boot where the codec clock comes from. `P:0x100072–0x10007F`
 samples port D bits 2–3 about 4,000 times.
@@ -287,9 +311,9 @@ samples port D bits 2–3 about 4,000 times.
   `$3E3C`). The block is then 73,728 cycles at any clock.
 
 Which path the hardware takes is
-[not yet known](17-open-questions.md). The "about 68k usable per block" used in
-earlier hardware figures is the second reading. Either way, the 15 floor slots
-of a full kit take about 52k cycles on hardware.
+[not yet known](17-open-questions.md), but it does not change DSP2's count: at
+98.784 MHz a 32-sample block is 71,680 DSP2 cycles on either path. The "about
+68k usable per block" used in earlier hardware figures should read 71,680.
 
 The safe total on hardware is lower: the emulator charges no external-memory
 wait states and no pipeline interlocks. Leave generous headroom and measure worst cases, not averages.
