@@ -4,7 +4,12 @@ A custom image is made by editing the **decompressed** MainOS and DSP2 payloads,
 recompressing those two, and reassembling the blob chain. Custom flash banks go
 in the erased gap after the chain. Everything else stays byte-identical:
 
-- the boot sector `0x0000–0x3FFF`;
+- the boot sector `0x0000–0x3FFF`, including the magic `0x224B` at `0x3FFE`;
+- in MainOS, the first-run boot-sector programming code (`0x200046–0x200237`,
+  and its call at `0x2002BA`) and the embedded boot-sector copy
+  (`0x2481D0–0x24BB8F`). These are not free space. MainOS uses them to erase and
+  rewrite the boot sector (see
+  [first-run boot-sector programming](03-firmware-image.md#first-run-boot-sector-programming)).
 - DSP1, OS_A and OS_B (copied as compressed records, only moved);
 - all flash from `0x100000` up.
 
@@ -393,6 +398,11 @@ Before writing the output:
 6. **Version** reads back as intended.
 7. **SysEx.** Encode, decode, apply to the stock image; the result equals the
    new image.
+8. **Boot-sector guard.** The image carries `0x224B` at flash `0x3FFE`. The
+   edited MainOS still holds the stock bytes at `0x200046–0x200237` and
+   `0x2002BA–0x2002BD`, and its embedded copy equals the boot sector:
+   `mainos[0x481D0:0x481D0 + 0x39C0] == image[0:0x39C0]`. A failure here can
+   brick a unit beyond SysEx recovery: do not ship the image.
 
 A boot test then checks the result in live memory (see
 [emulation and verification](16-emulation-and-verification.md)).

@@ -123,6 +123,77 @@ internal host bootstrap ROM: word count, load address `P:0x100`, then the words.
 The stubs are stored in the boot sector. The stub then accepts the typed-section
 stream below.
 
+## First-run boot-sector programming
+
+> [!WARNING]
+> **MainOS can erase and rewrite the boot sector**, which holds the bootloader
+> and the MIDI updater. If that rewrite runs with bad source data, or is
+> interrupted, the unit can no longer be recovered over SysEx; only an external
+> flash programmer can restore it. Stock images never trigger it. A custom image
+> can, if it changes any of the bytes listed below.
+
+**When it runs.** On **every boot**, the first call in MainOS's platform init
+(`0x2002B8` → `jsr 0x200140`) reads flash word `0x3FFE`. This happens before the
+chip-select setup, so it reads flash at its low address, not through the CS0
+remap. If the word is `0x224B` (the magic every programmed unit carries), the
+routine returns and nothing happens. Otherwise it reprograms the boot sector:
+
+1. **Erase** the boot sector (`0x200046`): AMD sector-erase commands at flash
+   `0x0000` and at `0x2000`, each polled until it reads `0xFFFF`. That covers
+   `0x0000–0x3FFF` whether the part has one 16 KiB boot sector or two 8 KiB
+   ones. It removes the bootloader, decompressor, DSP stubs and the MIDI updater.
+2. **Program** flash `0x0000–0x39BF` word by word (`0x2000F0`, AMD word program,
+   polled) from the copy of the boot sector embedded in MainOS, at CPU
+   `0x2481D0` (decompressed MainOS file offset `0x481D0`, `0x39C0` bytes).
+3. **Write the magic**: `0x224B` at flash `0x3FFE`.
+4. **Park**: call two OS routines (`0x21405C` with `156250`, then `0x225A34`)
+   and spin until the unit is restarted.
+
+Flash `0x39C0–0x3FFD` is not copied; it stays erased (`0xFF`), as it is in the
+stock image. The stock copy is byte-identical to the stock boot sector, so on a
+stock unit a run would restore the same bytes (static reading; it has never been
+triggered).
+
+**Memory locations involved**
+
+| Location | What it is | Rule |
+| --- | --- | --- |
+| Flash `0x3FFE` (word) | The magic `0x224B` | Must always read `0x224B`. Never erase it, and never write a full flash image without it |
+| Flash `0x0000–0x3FFF` | The boot sector, erased by the commands at `0x0000` and `0x2000` | Copy byte for byte from the stock image |
+| MainOS `0x200140–0x200237` | The check and the rewrite loop | Do not patch |
+| MainOS `0x200046–0x2000EF` | The boot-sector erase helper | Do not patch |
+| MainOS `0x2000F0–0x20013F` | The word-program helper | Do not patch |
+| MainOS `0x2002BA` | The `jsr 0x200140` in the platform init | Do not patch or move |
+| MainOS `0x2481D0–0x24BB8F` (file `0x481D0–0x4BB8F`) | The embedded boot-sector copy | **Not free space.** Do not edit, relocate or reuse |
+
+**What can trigger it**
+
+- **A MainOS patch that disturbs the check.** For example, an edit to the
+  compare at `0x200192`, or to the branch after it, makes the rewrite run on
+  every boot.
+- **A full flash image without the magic.** An image written with a flash
+  programmer, or a dump of a part-erased chip, triggers it if word `0x3FFE` isn't
+  `0x224B`. The SysEx updater can't cause this: it never erases or programs
+  `0x0000–0x3FFF` (see [SysEx updates](05-sysex-updates.md#program-phase)).
+- **Another hardware variant whose boot sector lacks the magic.** Its boot
+  sector would be replaced by the 1.63 boot sector held in this image's copy.
+
+**What makes it dangerous**
+
+- **A rewrite with an altered copy installs a broken bootloader and updater.**
+  If the embedded copy was edited, moved or overwritten, the bytes at `0x2481D0`
+  are no longer the boot sector, and the rewrite installs whatever they are.
+  The unit then fails to boot, or boots without a working updater. A broken
+  updater cannot be fixed over SysEx.
+- **There is no protection against power loss.** Once step 1 has erased the
+  boot sector, a power cut before step 3 leaves no boot code.
+- **The routine doesn't check the copy.** It programs whatever the `0x39C0`
+  bytes at `0x2481D0` hold.
+
+Image builders should check, before writing an image, that the embedded copy
+equals `image[0:0x39C0]`, that the routine bytes match stock, and that the image
+carries `0x224B` at `0x3FFE` (see [checks](12-packing-firmware.md#checks)).
+
 ## DSP upload stream
 
 A decompressed DSP blob is a stream of 24-bit words, **3 bytes each,

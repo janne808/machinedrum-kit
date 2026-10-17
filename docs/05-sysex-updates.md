@@ -121,7 +121,12 @@ files send `F7`):
    flash starting at `0x4000`.
 
 Data sent below `0x4000` is staged in RAM `0x1FC000–0x1FFFFF` but never
-programmed. **A normal update cannot modify the boot sector.**
+programmed. **A normal update cannot modify the boot sector.** The MainOS it
+installs can, though. On every boot, MainOS checks the magic at flash `0x3FFE`;
+if it isn't `0x224B`, MainOS erases the boot sector and rewrites it from a copy
+embedded in MainOS. An update whose MainOS changes that check or that copy can
+destroy the updater on the next boot. See
+[first-run boot-sector programming](03-firmware-image.md#first-run-boot-sector-programming).
 
 The **extended-memory path** (byte `01`) needs a second flash chip (ID `0x2022DF`
 or `0x2022FD`, else "NO EXTEND MEM"). It erases and programs from `0x100000`
@@ -143,3 +148,13 @@ code checks the upgrade flag before it decompresses anything. A bad OS image
 (one that hangs, fails a checksum, or crashes the OS) can therefore always be
 replaced: enter the upgrade mode and send the stock `.syx` (**Static**: this
 follows from the updater code).
+
+> [!WARNING]
+> **The exception is MainOS's first-run boot-sector programming.** The boot
+> sector is never erased by the updater, but MainOS erases and rewrites it
+> whenever flash word `0x3FFE` isn't `0x224B`. If an image's MainOS alters the
+> check (`0x200140–0x200237`) or the embedded boot-sector copy (`0x2481D0–0x24BB8F`),
+> the first boot of that image can replace the updater with garbage. After
+> that, SysEx recovery is impossible and the flash must be reprogrammed
+> externally. Never edit those MainOS bytes. See
+> [first-run boot-sector programming](03-firmware-image.md#first-run-boot-sector-programming).
