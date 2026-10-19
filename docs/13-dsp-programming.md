@@ -265,7 +265,7 @@ lookup was rescheduled, bit-exact, removing mainly AGU interlocks.
   rescheduling for them alone is not worth code size.
 
 **The slot floor caps the gain.** A machine already under the floor (3,072
-cycles plus dispatch; about 3.1k–3.5k on hardware) gains nothing from scheduling (see [budgeting](#budgeting)).
+emulated cycles plus dispatch; about 3.3k on hardware) gains nothing from scheduling (see [budgeting](#budgeting)).
 Schedule the machines that are above the floor, and the hot loops of
 multi-track machines.
 
@@ -429,18 +429,29 @@ compute sines or upload your own table.
 
 ## Budgeting
 
-- **73,728 cycles** per block for DSP2's whole producer pass: 16 renders plus
-  dispatch, updates, interrupts and DMA waits.
-- **Every track costs at least 3,072 cycles**, the time to send its 32-word
-  block to DSP1 (96 cycles per word). DSP2 renders into one of two buffers and
-  waits for the previous transfer before starting the next, so time below the
-  floor is lost, not banked. Budget `sum(max(render + ~40, 3,072))`, not the
-  sum of renders. The 16 transfers alone take 49,152 cycles; about 24k is left
-  for render time above the floor (see the
+- **71,680 cycles** per block on hardware for DSP2's whole producer pass: 16
+  renders plus dispatch, updates, interrupts and DMA waits. DSP2 runs at
+  98.784 MHz (2,240 cycles per sample): its program never writes PCTL and keeps
+  the boot stub's PLL setting. DSP1 runs at 101.6064 MHz (73,728 per block).
+  **The emulator clocks DSP2 at DSP1's rate and gives 73,728**, so emulated
+  headroom overstates the hardware's by 2,048 cycles a block (see
+  [the maximum](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
+- **Every track costs at least one link transfer**, the time to send its
+  32-word block to DSP1:
+  - **Emulator:** 3,072 cycles (96 per word).
+  - **Hardware:** about 3,290 measured, 3,200 by the register decode (100 per
+    word).
+
+  DSP2 renders into one of two buffers and waits for the previous transfer
+  before starting the next, so time below the floor is lost, not banked.
+  Budget `sum(max(render + ~40, floor))`, not the sum of renders. The 16
+  transfers take 49,152 emulated cycles, leaving about 24k. On hardware they
+  take 51.2k–52.6k of 71,680, leaving about 19k–20.5k for render time above the
+  floor (see the
   [voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
   - An **idle** track renders for 3,438 cycles (the fallback renderer's
     padding), about one transfer.
-  - A cheaper machine on that track saves only the part above 3,072.
+  - A cheaper machine on that track saves only the part above the floor.
 - **Work in a track's slot is free up to the floor.** A machine that occupies
   two tracks gains from the second only by moving real work into that
   track's render; a second render that just writes zeros still costs a full
@@ -518,12 +529,17 @@ compute sines or upload your own table.
   **Hardware budget (2026-10-05, 2026-10-09).** Fifteen plain oscillators,
   fifteen PWM oscillators with slide, seven two-track reverbs and fourteen
   delays all left exactly the same load-meter headroom, about 21.5k cycles:
-  they all sit on the floor. The 15 floor slots therefore take about 52k cycles
-  on hardware. That is about 3.11k per slot in a block of about 68k usable
-  cycles, or about 3.48k per slot in the full 73,728; one meter reading cannot
-  separate the two (see the
+  they all sit on the floor. In DSP2's 71,680-cycle hardware block, the 15
+  floor slots plus pass overhead therefore take about 50.2k cycles: **about
+  3,345 per slot** (see the
   [voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)).
-  The hardware per-instance figures in these docs use the first reading.
+  - **Older per-instance figures:** some hardware figures in these docs were
+    worked out before the DSP2 clock was known, with about 3.11k per slot in a
+    block of about 68k.
+  - **Step counts are unaffected:** differences between meter-step readings
+    still hold.
+  - **Absolute figures run low:** a per-instance figure that includes floor
+    slots is about 235 cycles low per slot it occupies.
 
   Count code words a typical block executes, not every word a long run ever
   touches. Start-up and rarely taken paths inflate the latter: here 1,020
@@ -553,7 +569,8 @@ compute sines or upload your own table.
 
 As rough guidance from other custom machines built the same way:
 
-Render costs only; each track still costs at least 3,072 of the pass.
+Render costs only; each track still costs at least one transfer of the pass
+(3,072 emulated cycles, about 3,290 on hardware).
 
 | Kind of machine | Cycles/block |
 | --- | ---: |

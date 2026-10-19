@@ -6,8 +6,10 @@ All have complete sources and build scripts
 in [`tools/examples`](../tools/examples/). For each: identity, algorithm,
 packet and state layout, and cost.
 
-Costs are emulator cycles per 32-sample block (budget 73,728; an idle track
-costs 3,438). The emulator charges no memory wait states, so hardware costs
+Costs are emulator cycles per 32-sample block (an idle track costs 3,438). The
+emulator's block is 73,728 cycles, but on hardware DSP2 runs at 98.784 MHz and
+its block is **71,680** (see the
+[voice-link slot floor](08-dsp2-voice-abi.md#the-voice-link-slot-floor)). The emulator charges no memory wait states, so hardware costs
 are higher.
 
 | Machine | ID / DSP type | Family | DSP bank | Kind | Cost |
